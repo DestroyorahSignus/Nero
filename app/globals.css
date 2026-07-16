@@ -1,0 +1,289 @@
+@import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
+
+@theme {
+  /* Devil Trigger palette */
+  --color-void: #0a0d14;
+  --color-panel: #101623;
+  --color-edge: #1d2738;
+  --color-spectral: #5ee1ff; /* Nero's Devil Trigger blue */
+  --color-crimson: #e1364c; /* critic / failure */
+  --color-ember: #f2b94b; /* planner / pending */
+  --color-arcane: #9d7bff; /* memory / TRISH */
+  --color-bone: #edf1f7;
+  --color-mist: #7c8799;
+
+  --font-display: var(--font-chakra), sans-serif;
+  --font-sans: var(--font-plex), sans-serif;
+  --font-mono: var(--font-plex-mono), monospace;
+}
+
+html {
+  background: var(--color-void);
+  color: var(--color-bone);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-spectral) 30%, transparent);
+}
+
+/* ── Angular corner cuts — the geometry of the whole interface ──── */
+.cut {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 14px) 0,
+    100% 14px,
+    100% 100%,
+    14px 100%,
+    0 calc(100% - 14px)
+  );
+}
+.cut-sm {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 8px) 0,
+    100% 8px,
+    100% 100%,
+    8px 100%,
+    0 calc(100% - 8px)
+  );
+}
+
+/* ── Hazard stripes for running states ───────────────────────────── */
+.hazard {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--color-spectral) 22%, transparent) 0 10px,
+    transparent 10px 20px
+  );
+  background-size: 28.28px 28.28px;
+}
+.hazard-run {
+  animation: hazard-scroll 0.9s linear infinite;
+}
+@keyframes hazard-scroll {
+  to {
+    background-position: 28.28px 0;
+  }
+}
+
+/* ── Hero wordmark glitch (fires on load + hover) ────────────────── */
+.glitch {
+  position: relative;
+  animation: glitch-skew 6s steps(1) infinite;
+}
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  opacity: 0.8;
+  pointer-events: none;
+}
+.glitch::before {
+  color: var(--color-spectral);
+  animation: glitch-a 6s steps(1) infinite;
+}
+.glitch::after {
+  color: var(--color-crimson);
+  animation: glitch-b 6s steps(1) infinite;
+}
+@keyframes glitch-a {
+  0%, 92.9%, 95.4%, 100% { transform: none; clip-path: inset(0 0 100% 0); }
+  93% { transform: translate(-3px, 2px); clip-path: inset(15% 0 60% 0); }
+  94% { transform: translate(2px, -1px); clip-path: inset(60% 0 10% 0); }
+  95% { transform: translate(-2px, 0); clip-path: inset(40% 0 40% 0); }
+}
+@keyframes glitch-b {
+  0%, 92.9%, 95.4%, 100% { transform: none; clip-path: inset(0 0 100% 0); }
+  93% { transform: translate(3px, -2px); clip-path: inset(70% 0 5% 0); }
+  94% { transform: translate(-2px, 1px); clip-path: inset(10% 0 75% 0); }
+  95% { transform: translate(2px, 0); clip-path: inset(45% 0 35% 0); }
+}
+@keyframes glitch-skew {
+  0%, 92.9%, 95.4%, 100% { transform: none; }
+  93.5% { transform: skewX(-1.5deg); }
+  94.5% { transform: skewX(1deg); }
+}
+
+/* ── Pipeline pulse dot (landing "how a run works") ──────────────── */
+.pulse-track {
+  position: relative;
+  overflow: hidden;
+}
+.pulse-track::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -12%;
+  width: 12%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, var(--color-spectral));
+  filter: drop-shadow(0 0 6px var(--color-spectral));
+  animation: pulse-travel 3.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+@keyframes pulse-travel {
+  to {
+    left: 112%;
+  }
+}
+
+/* ── React Flow re-skin ──────────────────────────────────────────── */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-edge-stroke: var(--color-edge);
+  --xy-edge-stroke-width: 1.5;
+  --xy-attribution-background-color: transparent;
+}
+.react-flow__attribution {
+  color: var(--color-mist);
+  opacity: 0.5;
+}
+.react-flow__edge.edge-active path {
+  stroke: var(--color-spectral);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px var(--color-spectral));
+  animation: edge-pulse 1.2s ease-in-out infinite;
+}
+@keyframes edge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ── Node glow states ────────────────────────────────────────────── */
+.node-running {
+  box-shadow:
+    0 0 0 1px var(--color-spectral),
+    0 0 18px color-mix(in srgb, var(--color-spectral) 45%, transparent);
+  animation: node-breathe 1.6s ease-in-out infinite;
+}
+@keyframes node-breathe {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px var(--color-spectral),
+      0 0 10px color-mix(in srgb, var(--color-spectral) 30%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px var(--color-spectral),
+      0 0 24px color-mix(in srgb, var(--color-spectral) 55%, transparent);
+  }
+}
+.node-failed {
+  box-shadow:
+    0 0 0 1px var(--color-crimson),
+    0 0 14px color-mix(in srgb, var(--color-crimson) 40%, transparent);
+}
+.node-done {
+  box-shadow: 0 0 0 1px
+    color-mix(in srgb, var(--color-spectral) 45%, var(--color-edge));
+}
+
+/* ── Style rank (the signature) ──────────────────────────────────── */
+.rank-glyph {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  background: linear-gradient(160deg, var(--color-spectral), #b7f0ff 55%, #ffffff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-spectral) 55%, transparent));
+  animation: rank-slam 0.45s cubic-bezier(0.2, 1.6, 0.3, 1) both;
+}
+.rank-glyph[data-fail="true"] {
+  background: linear-gradient(160deg, var(--color-crimson), #ff9aa8 60%, #fff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-crimson) 55%, transparent));
+}
+@keyframes rank-slam {
+  from {
+    transform: scale(2.4) rotate(-6deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(-3deg);
+    opacity: 1;
+  }
+}
+
+/* ── Mission banner slam ─────────────────────────────────────────── */
+.banner-slam {
+  animation: banner-in 0.5s cubic-bezier(0.16, 1.4, 0.3, 1) both;
+}
+@keyframes banner-in {
+  from {
+    transform: translateY(-16px) scaleY(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ── Combo meter shimmer ─────────────────────────────────────────── */
+.combo-fill {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-spectral) 65%, transparent),
+    var(--color-spectral)
+  );
+  box-shadow: 0 0 12px color-mix(in srgb, var(--color-spectral) 50%, transparent);
+  transition: width 0.25s cubic-bezier(0.3, 1.2, 0.4, 1);
+}
+
+/* ── Console atmosphere ──────────────────────────────────────────── */
+.console-atmosphere {
+  background-image:
+    radial-gradient(
+      ellipse 80% 55% at 50% -10%,
+      color-mix(in srgb, var(--color-spectral) 7%, transparent),
+      transparent
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 2px,
+      rgba(255, 255, 255, 0.008) 2px 4px
+    );
+}
+.hero-grid {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-edge) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-edge) 55%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 20%, black 30%, transparent 75%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__edge.edge-active path,
+  .node-running,
+  .rank-glyph,
+  .glitch,
+  .glitch::before,
+  .glitch::after,
+  .pulse-track::after,
+  .hazard-run,
+  .banner-slam {
+    animation: none;
+  }
+}
+
+/* Thin scrollbars for panels */
+.panel-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.panel-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-edge);
+  border-radius: 3px;
+}

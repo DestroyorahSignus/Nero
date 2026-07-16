@@ -1,0 +1,39 @@
+{
+  "name": "nero",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NERO — Neural Executive & Reasoning Orchestrator. MCP-orchestrated planner→executor→critic multi-agent system with live agent-graph visualization.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "evals": "tsx lib/evals/run.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.15",
+    "@ai-sdk/google": "^4.0.17",
+    "@ai-sdk/groq": "^4.0.11",
+    "@ai-sdk/mcp": "^2.0.14",
+    "@ai-sdk/openai": "^4.0.15",
+    "@ai-sdk/react": "^4.0.32",
+    "@modelcontextprotocol/sdk": "1.26.0",
+    "@upstash/redis": "^1.38.0",
+    "@xyflow/react": "^12.11.2",
+    "ai": "^7.0.29",
+    "mcp-handler": "^1.1.0",
+    "next": "^16.2.10",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.2",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4.3.2",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
