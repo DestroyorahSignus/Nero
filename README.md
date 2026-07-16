@@ -13,6 +13,8 @@ Reflexion self-correction, hard cost guardrails, and a live agent-graph console.
 
 ---
 
+> **Deep dive:** [ARCHITECTURE.md](./ARCHITECTURE.md) — 17 flowcharts + detailed explanation of every component, the Reflexion state machine, streaming design, and the trade-off table.
+
 ## Why this exists
 
 Tool-calling is table stakes. The hard parts of agentic systems are **bounded loops,
@@ -71,7 +73,7 @@ npm run evals             # full loop: plan + critique + reflexion
 
 ## Deploy
 
-1. Push to GitHub → import in Vercel (Fluid Compute is default-on; `vercel.json` sets `maxDuration: 800`).
+1. Push to GitHub → import in Vercel (Fluid Compute is default-on; `vercel.json` sets `maxDuration: 300`, Hobby-safe — raise to 800 on Pro).
 2. Set `LLM_PROVIDER` + the matching API key. Optionally add Upstash + Tavily.
 3. To demo the full MCP round-trip set `YAMATO_MODE=remote` and `NERO_SELF_URL=https://<your-app>`.
 

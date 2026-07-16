@@ -6,7 +6,7 @@ import { runNero, type OrchestratorSink } from "@/lib/agents/orchestrator";
 import type { NeroUIMessage } from "@/ai/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 800; // Fluid Compute; falls back to plan max
+export const maxDuration = 300; // Hobby-safe; raise to 800 on Vercel Pro
 
 /**
  * POST /api/agent

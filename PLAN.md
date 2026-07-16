@@ -65,7 +65,7 @@ verdicts land as a DMC style rank (D→SSS) — the signature UI element.
 
 ## Deployment (Vercel)
 
-- Node runtime, `maxDuration = 800` (vercel.json) — requires Fluid Compute (default-on).
+- Node runtime, `maxDuration = 300` (vercel.json) — Hobby-safe; raise to 800 on Pro. Requires Fluid Compute (default-on).
 - `LLM_PROVIDER` swaps anthropic/openai/google/groq with zero code change (`lib/providers.ts`);
   per-role model overrides via `NERO_*_MODEL`.
 - Optional: `TAVILY_API_KEY` (search), `UPSTASH_REDIS_*` (durable memory), `REDIS_URL`

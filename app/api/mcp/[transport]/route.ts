@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ARSENAL } from "@/lib/tools/registry";
 
 export const runtime = "nodejs";
-export const maxDuration = 800;
+export const maxDuration = 300; // Hobby-safe; raise to 800 on Vercel Pro
 
 /**
  * YAMATO's far side: NERO's arsenal exposed as a real MCP server over
@@ -54,7 +54,7 @@ const handler = createMcpHandler(
   {},
   {
     basePath: "/api/mcp",
-    maxDuration: 800,
+    maxDuration: 300,
     verboseLogs: false,
     // Optional: Redis enables Streamable HTTP session resumption across
     // serverless instances. Works without it for stateless tool calls.

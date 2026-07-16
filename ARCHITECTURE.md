@@ -522,7 +522,7 @@ flowchart LR
 flowchart TB
     subgraph VERCEL["Vercel (Fluid Compute, Node runtime)"]
         STATIC["static: / and /run shells"]
-        FN1["/api/agent — maxDuration 800"]
+        FN1["/api/agent — maxDuration 300"]
         FN2["/api/mcp/[transport]"]
         FN3["/api/status · /api/runs"]
     end
@@ -535,7 +535,7 @@ flowchart TB
 ```
 
 - **Node runtime everywhere** — `node:vm`, mcp-handler, and long durations all rule out Edge (25s hard cap).
-- `maxDuration: 800` requires a Pro plan; on Hobby set it to 300 (plenty for demo runs).
+- `maxDuration` ships at 300 (works on every plan, plenty for demo runs); raise to 800 on Pro for longer missions.
 - **Early streaming is a survival mechanism**: the response begins before the first model call so the platform never kills a "silent" function mid-run.
 - Environment variables are the entire configuration surface — see `.env.example`. The minimum viable deployment is exactly two vars: `LLM_PROVIDER` + one API key.
 
@@ -563,7 +563,7 @@ nero/
 ├── PLAN.md                     # the build plan this repo was executed from
 ├── ARCHITECTURE.md             # this document
 ├── README.md                   # quickstart, crew table, eval table, deploy
-├── vercel.json                 # maxDuration 800 for app/api/**
+├── vercel.json                 # maxDuration 300 for app/api/** (800 on Pro)
 ├── .env.example                # the full configuration surface
 │
 ├── ai/
