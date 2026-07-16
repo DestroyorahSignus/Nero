@@ -3,6 +3,8 @@ import {
   createUIMessageStreamResponse,
 } from "ai";
 import { runNero, type OrchestratorSink } from "@/lib/agents/orchestrator";
+import { isProviderId } from "@/lib/providers";
+import type { RunConfig } from "@/lib/run-context";
 import type { NeroUIMessage } from "@/ai/types";
 
 export const runtime = "nodejs";
@@ -31,6 +33,16 @@ export async function POST(req: Request) {
   }
 
   const sessionId = body.id ?? crypto.randomUUID();
+
+  // BYOK: optional per-request keys from the console's key vault.
+  // Used for this request only — never stored, never logged.
+  const providerHeader = req.headers.get("x-nero-provider")?.toLowerCase();
+  const config: RunConfig = {
+    provider:
+      providerHeader && isProviderId(providerHeader) ? providerHeader : undefined,
+    apiKey: req.headers.get("x-nero-api-key") ?? undefined,
+    tavilyKey: req.headers.get("x-nero-tavily-key") ?? undefined,
+  };
 
   const stream = createUIMessageStream<NeroUIMessage>({
     originalMessages: body.messages,
@@ -67,7 +79,7 @@ export async function POST(req: Request) {
         },
       };
 
-      await runNero(goal, sessionId, sink);
+      await runNero(goal, sessionId, sink, config);
 
       if (textOpen) {
         writer.write({ type: "text-end", id: textId });
@@ -75,7 +87,7 @@ export async function POST(req: Request) {
     },
     onError: (error) => {
       console.error("[nero] run failed:", error);
-      return "The run failed. Check server logs and provider API keys.";
+      return "The run failed — most likely a missing or invalid API key. Open KEYS in the console header to add your own, or set one on the server.";
     },
   });
 

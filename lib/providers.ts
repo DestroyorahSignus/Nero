@@ -1,8 +1,9 @@
-import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
-import { google } from "@ai-sdk/google";
-import { groq } from "@ai-sdk/groq";
+import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
+import { openai, createOpenAI } from "@ai-sdk/openai";
+import { google, createGoogleGenerativeAI } from "@ai-sdk/google";
+import { groq, createGroq } from "@ai-sdk/groq";
 import type { LanguageModel } from "ai";
+import { runConfig } from "./run-context";
 
 export type AgentRole = "planner" | "executor" | "critic";
 export type ProviderId = "anthropic" | "openai" | "google" | "groq";
@@ -44,19 +45,56 @@ const ENV_OVERRIDE: Record<AgentRole, string | undefined> = {
   critic: process.env.NERO_CRITIC_MODEL,
 };
 
+export function isProviderId(p: string): p is ProviderId {
+  return p === "anthropic" || p === "openai" || p === "google" || p === "groq";
+}
+
+/**
+ * Active provider: a BYOK request override (from the console's key vault)
+ * wins over the LLM_PROVIDER env var.
+ */
 export function activeProvider(): ProviderId {
+  const override = runConfig().provider;
+  if (override) return override;
   const p = (process.env.LLM_PROVIDER ?? "anthropic").toLowerCase();
-  if (p === "anthropic" || p === "openai" || p === "google" || p === "groq") {
-    return p;
-  }
+  if (isProviderId(p)) return p;
   throw new Error(
     `Unknown LLM_PROVIDER "${p}". Use anthropic | openai | google | groq.`,
   );
 }
 
+/** True if the server has an env API key for the given provider. */
+export function serverKeyConfigured(provider: ProviderId): boolean {
+  const envVar: Record<ProviderId, string | undefined> = {
+    anthropic: process.env.ANTHROPIC_API_KEY,
+    openai: process.env.OPENAI_API_KEY,
+    google: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    groq: process.env.GROQ_API_KEY,
+  };
+  return Boolean(envVar[provider]);
+}
+
 export function resolveModel(role: AgentRole): LanguageModel {
   const provider = activeProvider();
   const id = ENV_OVERRIDE[role] ?? DEFAULTS[provider][role];
+  const byokKey = runConfig().apiKey;
+
+  // BYOK path: build a provider instance bound to the request-scoped key.
+  // The key never leaves this call — nothing is cached or logged.
+  if (byokKey) {
+    switch (provider) {
+      case "anthropic":
+        return createAnthropic({ apiKey: byokKey })(id);
+      case "openai":
+        return createOpenAI({ apiKey: byokKey })(id);
+      case "google":
+        return createGoogleGenerativeAI({ apiKey: byokKey })(id);
+      case "groq":
+        return createGroq({ apiKey: byokKey })(id);
+    }
+  }
+
+  // Server-key path: default singletons read the env vars.
   switch (provider) {
     case "anthropic":
       return anthropic(id);

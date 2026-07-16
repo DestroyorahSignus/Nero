@@ -1,4 +1,4 @@
-import { modelLabel, activeProvider } from "@/lib/providers";
+import { modelLabel, activeProvider, serverKeyConfigured } from "@/lib/providers";
 
 export const runtime = "nodejs";
 
@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 export async function GET() {
   return Response.json({
     provider: activeProvider(),
+    serverKeyConfigured: serverKeyConfigured(activeProvider()),
     models: {
       planner: modelLabel("planner"),
       executor: modelLabel("executor"),

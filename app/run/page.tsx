@@ -22,6 +22,7 @@ import { PhaseTracker } from "@/components/console/PhaseTracker";
 import { ComboMeter } from "@/components/console/ComboMeter";
 import { RunHistory } from "@/components/console/RunHistory";
 import { CutPanel } from "@/components/ui/CutPanel";
+import { KeyVault, readVault } from "@/components/console/KeyVault";
 import {
   TraceTimeline,
   type TraceEntry,
@@ -35,6 +36,7 @@ const MISSIONS = [
 
 interface DeployStatus {
   provider: string;
+  serverKeyConfigured: boolean;
   models: { planner: string; executor: string; critic: string };
   yamatoMode: string;
   budgetTokens: number;
@@ -46,10 +48,28 @@ export default function RunConsole() {
   const [goal, setGoal] = useState("");
   const [deploy, setDeploy] = useState<DeployStatus | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
+  const [vaultOpen, setVaultOpen] = useState(false);
+  const [hasClientKey, setHasClientKey] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    setHasClientKey(Boolean(readVault().apiKey));
+  }, []);
+
   const { messages, sendMessage, status } = useChat<NeroUIMessage>({
-    transport: new DefaultChatTransport({ api: "/api/agent" }),
+    transport: new DefaultChatTransport({
+      api: "/api/agent",
+      // Resolved fresh on every request: BYOK keys ride as headers,
+      // straight from sessionStorage — nothing baked into the transport.
+      headers: () => {
+        const v = readVault();
+        const h: Record<string, string> = {};
+        if (v.apiKey) h["x-nero-api-key"] = v.apiKey;
+        if (v.provider) h["x-nero-provider"] = v.provider;
+        if (v.tavilyKey) h["x-nero-tavily-key"] = v.tavilyKey;
+        return h;
+      },
+    }),
   });
 
   const running = status === "submitted" || status === "streaming";
@@ -207,6 +227,21 @@ export default function RunConsole() {
                 />
               </>
             )}
+            <Chip
+              label="KEY"
+              value={hasClientKey ? "client" : deploy?.serverKeyConfigured ? "server" : "missing"}
+              accent={
+                hasClientKey || deploy?.serverKeyConfigured
+                  ? "text-spectral"
+                  : "text-crimson"
+              }
+            />
+            <button
+              onClick={() => setVaultOpen(true)}
+              className="font-display cut-sm border border-spectral/60 bg-spectral/5 px-3 py-1 text-[10px] font-semibold tracking-widest text-spectral transition hover:bg-spectral/20"
+            >
+              KEYS
+            </button>
             <p className="font-mono hidden text-[10px] tracking-[0.2em] text-mist md:block">
               {running ? "● LIVE" : "READY"}
             </p>
@@ -250,6 +285,18 @@ export default function RunConsole() {
             {running ? "RUNNING…" : "DEPLOY"}
           </button>
         </div>
+        {!hasClientKey && deploy && !deploy.serverKeyConfigured && (
+          <p className="font-mono mt-3 border-l-2 border-ember pl-3 text-[10px] leading-relaxed text-ember">
+            No API key on this deployment — missions will fail. Hit{" "}
+            <button
+              onClick={() => setVaultOpen(true)}
+              className="underline underline-offset-2 hover:text-bone"
+            >
+              KEYS
+            </button>{" "}
+            to add your own (stays in this tab, never stored server-side).
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           {MISSIONS.map((m) => (
             <button
@@ -367,6 +414,12 @@ export default function RunConsole() {
           </CutPanel>
         </aside>
       </section>
+
+      <KeyVault
+        open={vaultOpen}
+        onClose={() => setVaultOpen(false)}
+        onChange={setHasClientKey}
+      />
     </main>
   );
 }

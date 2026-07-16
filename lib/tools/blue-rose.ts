@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { runConfig } from "@/lib/run-context";
 
 /**
  * BLUE ROSE — Nero's revolver. Web reconnaissance toolset.
@@ -17,12 +18,12 @@ export const webSearch = tool({
     maxResults: z.number().int().min(1).max(8).default(5),
   }),
   execute: async ({ query, maxResults }) => {
-    const key = process.env.TAVILY_API_KEY;
+    const key = runConfig().tavilyKey ?? process.env.TAVILY_API_KEY;
     if (!key) {
       return {
         ok: false as const,
         error:
-          "web_search is not configured on this deployment (missing TAVILY_API_KEY). If the user supplied URLs, use web_fetch on them; otherwise answer from your own knowledge and say so.",
+          "web_search is not configured on this deployment (no Tavily key configured on the server or supplied via the key vault). If the user supplied URLs, use web_fetch on them; otherwise answer from your own knowledge and say so.",
       };
     }
     const res = await fetch("https://api.tavily.com/search", {

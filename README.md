@@ -59,6 +59,16 @@ npm run dev                        # http://localhost:3000 → OPEN THE CONSOLE
 Everything else is optional: without Tavily the search tool degrades honestly,
 without Upstash memory falls back in-process for dev.
 
+## Bring your own key (BYOK)
+
+No server key? No problem — hit **KEYS** in the console header and paste your
+own provider key (+ optional Tavily key). Keys live in **sessionStorage only**
+(this tab, gone on close), ride along as request headers, and are used
+server-side for that request via `AsyncLocalStorage` — never persisted, never
+logged. This is what makes the public demo usable by anyone without the
+deployer footing the bill. The `KEY` chip shows the active source:
+`CLIENT` / `SERVER` / `MISSING`.
+
 ## Evals (run these, put the numbers here)
 
 ```bash

@@ -4,6 +4,7 @@ import { critique as ladyCritique } from "./lady";
 import { drawYamato } from "@/lib/mcp/yamato";
 import { trish } from "@/lib/memory/trish";
 import { TokenBudget, MAX_REFLECTIONS } from "@/lib/budget";
+import { withRunConfig, type RunConfig } from "@/lib/run-context";
 import { scoreToRank } from "@/ai/types";
 import type {
   PlanData,
@@ -48,7 +49,17 @@ export interface RunResult {
   elapsedMs: number;
 }
 
-export async function runNero(
+export function runNero(
+  goal: string,
+  sessionId: string,
+  sink: OrchestratorSink,
+  config: RunConfig = {},
+): Promise<RunResult> {
+  // BYOK keys ride request-scoped context — never module/global state.
+  return withRunConfig(config, () => runNeroInner(goal, sessionId, sink));
+}
+
+async function runNeroInner(
   goal: string,
   sessionId: string,
   sink: OrchestratorSink,
