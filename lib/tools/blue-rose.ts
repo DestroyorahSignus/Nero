@@ -15,7 +15,7 @@ export const webSearch = tool({
     "Search the web for current information. Returns a list of results with title, url and content snippet. Prefer this for anything time-sensitive or outside your knowledge.",
   inputSchema: z.object({
     query: z.string().min(2).describe("Concise search query, 2-8 words"),
-    maxResults: z.number().int().min(1).max(8).default(5),
+    maxResults: z.number().int().min(1).max(6).default(3),
   }),
   execute: async ({ query, maxResults }) => {
     const key = runConfig().tavilyKey ?? process.env.TAVILY_API_KEY;
@@ -57,7 +57,7 @@ export const webSearch = tool({
       results: (data.results ?? []).map((r) => ({
         title: r.title,
         url: r.url,
-        snippet: r.content.slice(0, 600),
+        snippet: r.content.slice(0, 400),
       })),
     };
   },

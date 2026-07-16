@@ -87,6 +87,7 @@ async function runNeroInner(
 
   const yamato = await drawYamato();
   let answer = "";
+  let crash: string | null = null;
   let verdict: Verdict | null = null;
   let attempt = 0;
 
@@ -122,6 +123,7 @@ async function runNeroInner(
   );
 
   try {
+    try {
     while (attempt <= MAX_REFLECTIONS) {
       attempt += 1;
       const reflections = await trish.getReflections(sessionId);
@@ -293,6 +295,12 @@ async function runNeroInner(
         sink.reflection(`reflection-${attempt}`, reflection);
       }
     }
+    } catch (err) {
+      // Provider blew up mid-run (rate limit, oversized request, outage).
+      // Keep whatever we have, report the truth, end the mission cleanly.
+      crash = err instanceof Error ? err.message : String(err);
+      console.error("[nero] attempt crashed:", err);
+    }
   } finally {
     await yamato.close();
   }
@@ -300,7 +308,7 @@ async function runNeroInner(
   const elapsedMs = Date.now() - t0;
   const finalPhase: RunStatusData["phase"] = budget.exceeded
     ? "budget_exceeded"
-    : verdict?.pass
+    : verdict?.pass && !crash
       ? "done"
       : "failed";
   sink.status({
@@ -310,7 +318,9 @@ async function runNeroInner(
         ? `Token budget (${budget.maxTotalTokens.toLocaleString()}) reached — returning best answer so far`
         : finalPhase === "done"
           ? "Mission accomplished"
-          : "Max attempts reached — returning best answer with the critic's caveats",
+          : crash
+            ? `Provider error ended the run: ${crash.slice(0, 300)}`
+            : "Max attempts reached — returning best answer with the critic's caveats",
   });
   pushMetrics();
 

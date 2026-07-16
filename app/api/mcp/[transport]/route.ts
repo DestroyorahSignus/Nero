@@ -18,7 +18,7 @@ const handler = createMcpHandler(
     server.tool(
       "web_search",
       "Search the web for current information (Tavily-backed).",
-      { query: z.string().min(2), maxResults: z.number().int().min(1).max(8).default(5) },
+      { query: z.string().min(2), maxResults: z.number().int().min(1).max(6).default(3) },
       async (args) => mcpText(await call(ARSENAL.web_search, args)),
     );
     server.tool(

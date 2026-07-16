@@ -97,7 +97,9 @@ export async function POST(req: Request) {
     },
     onError: (error) => {
       console.error("[nero] run failed:", error);
-      return "The run failed — most likely a missing or invalid API key. Open KEYS in the console header to add your own, or set one on the server.";
+      const detail =
+        error instanceof Error ? error.message : String(error ?? "unknown");
+      return `Run failed: ${detail.slice(0, 400)} — if this mentions a key, open KEYS; if it mentions rate limits or request size, the provider throttled the run (free tiers are tight) — retry, simplify the mission, or switch provider in KEYS.`;
     },
   });
 

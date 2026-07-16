@@ -44,6 +44,7 @@ export async function plan(
       "Rules:",
       "- Prefer 1-3 steps. Only exceed 3 when the goal genuinely requires it.",
       "- If the goal is answerable without tools, plan a single 'none' step.",
+      "- Tool restraint: explanations, diagrams, flowcharts, writing, and general-knowledge tasks need NO tools — plan 'none'. Reserve web_search for current events or facts you genuinely cannot know, and never plan more than one search step.",
       "- Never plan steps for capabilities that do not exist in the tool list, and never plan tools marked OFFLINE — plan around them (own knowledge or other tools).",
     ].join("\n"),
     prompt: `Goal: ${goal}${reflectionBlock}`,
