@@ -10,6 +10,14 @@ export interface VaultKeys {
 }
 
 const STORAGE_KEY = "nero-vault";
+
+/**
+ * HTTP headers only permit ISO-8859-1, and real API keys are printable
+ * ASCII anyway — strip everything else. Kills the invisible zero-width
+ * characters that hitchhike on copy-paste from chat apps and web pages
+ * (which String.trim() does NOT remove) before they can break fetch().
+ */
+const sanitizeKey = (v: string): string => v.replace(/[^\x20-\x7E]/g, "").trim();
 const PROVIDERS = ["anthropic", "openai", "google", "groq"] as const;
 
 export function readVault(): VaultKeys {
@@ -18,7 +26,14 @@ export function readVault(): VaultKeys {
   }
   try {
     const raw = window.sessionStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as VaultKeys;
+    if (raw) {
+      const v = JSON.parse(raw) as VaultKeys;
+      return {
+        provider: sanitizeKey(v.provider ?? ""),
+        apiKey: sanitizeKey(v.apiKey ?? ""),
+        tavilyKey: sanitizeKey(v.tavilyKey ?? ""),
+      };
+    }
   } catch {
     // corrupted entry — treat as empty
   }
@@ -71,9 +86,9 @@ export function KeyVault({
 
   const save = () => {
     const trimmed: VaultKeys = {
-      provider: form.provider,
-      apiKey: form.apiKey.trim(),
-      tavilyKey: form.tavilyKey.trim(),
+      provider: sanitizeKey(form.provider),
+      apiKey: sanitizeKey(form.apiKey),
+      tavilyKey: sanitizeKey(form.tavilyKey),
     };
     if (trimmed.apiKey || trimmed.tavilyKey) {
       writeVault(trimmed);
