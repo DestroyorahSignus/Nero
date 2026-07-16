@@ -17,7 +17,7 @@ import { KeyVault, readVault } from "@/components/console/KeyVault";
 import { TraceTimeline } from "@/components/console/TraceTimeline";
 import { SpanWaterfall } from "@/components/console/SpanWaterfall";
 import { ApprovalCard } from "@/components/console/ApprovalCard";
-import { deriveConsoleState } from "@/lib/derive";
+import { deriveConsoleState, stripMdLite } from "@/lib/derive";
 
 const MISSIONS = [
   "Compute the 40th Fibonacci number exactly",
@@ -42,6 +42,7 @@ export default function RunConsole() {
   const [vaultOpen, setVaultOpen] = useState(false);
   const [safeMode, setSafeMode] = useState(true);
   const [hasClientKey, setHasClientKey] = useState(false);
+  const [vaultProvider, setVaultProvider] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -135,7 +136,11 @@ export default function RunConsole() {
           <div className="flex flex-wrap items-center gap-2">
             {deploy && (
               <>
-                <Chip label="LLM" value={deploy.provider} accent="text-spectral" />
+                <Chip
+                  label="LLM"
+                  value={hasClientKey && vaultProvider ? vaultProvider : deploy.provider}
+                  accent="text-spectral"
+                />
                 <Chip label="YAMATO" value={deploy.yamatoMode} accent="text-arcane" />
                 <Chip
                   label="SEARCH"
@@ -343,7 +348,7 @@ export default function RunConsole() {
             <div className="p-4">
               {state.finalText ? (
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-bone/90">
-                  {state.finalText}
+                  {stripMdLite(state.finalText)}
                 </p>
               ) : (
                 <p className="font-mono text-xs text-mist">
@@ -398,7 +403,10 @@ export default function RunConsole() {
       <KeyVault
         open={vaultOpen}
         onClose={() => setVaultOpen(false)}
-        onChange={setHasClientKey}
+        onChange={(hasKey, provider) => {
+          setHasClientKey(hasKey);
+          setVaultProvider(provider);
+        }}
       />
     </main>
   );

@@ -4,6 +4,7 @@ import { PlanSchema, type Plan } from "./schemas";
 import type { TokenBudget } from "@/lib/budget";
 import type { StoredReflection } from "@/lib/memory/trish";
 import { TOOL_META } from "@/lib/tools/registry";
+import { runConfig } from "@/lib/run-context";
 
 /**
  * VERGIL — planner. Cold, strategic, then steps back.
@@ -16,8 +17,12 @@ export async function plan(
   reflections: StoredReflection[],
   onPartial?: (partial: unknown) => void,
 ): Promise<Plan> {
+  const searchArmed = Boolean(runConfig().tavilyKey ?? process.env.TAVILY_API_KEY);
   const toolCatalog = Object.entries(TOOL_META)
-    .map(([name, meta]) => `- ${name} (${meta.server}): ${meta.blurb}`)
+    .map(([name, meta]) => {
+      const offline = name === "web_search" && !searchArmed;
+      return `- ${name} (${meta.server}): ${meta.blurb}${offline ? " — OFFLINE on this deployment: do NOT plan this tool" : ""}`;
+    })
     .join("\n");
 
   const reflectionBlock =
@@ -39,7 +44,7 @@ export async function plan(
       "Rules:",
       "- Prefer 1-3 steps. Only exceed 3 when the goal genuinely requires it.",
       "- If the goal is answerable without tools, plan a single 'none' step.",
-      "- Never plan steps for capabilities that do not exist in the tool list.",
+      "- Never plan steps for capabilities that do not exist in the tool list, and never plan tools marked OFFLINE — plan around them (own knowledge or other tools).",
     ].join("\n"),
     prompt: `Goal: ${goal}${reflectionBlock}`,
   });

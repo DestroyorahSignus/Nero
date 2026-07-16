@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -10,6 +10,7 @@ import {
   type Node,
   type Edge,
   type NodeProps,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import type { AgentStepData, ToolCallData, StepStatus } from "@/ai/types";
 
@@ -181,9 +182,19 @@ export function AgentGraph({
     return { nodes, edges };
   }, [agentSteps, toolCalls]);
 
+  // React Flow only auto-fits on mount; NERO's nodes stream in afterwards.
+  // Refit whenever the node set changes so the graph is never blank/off-screen.
+  const [inst, setInst] = useState<ReactFlowInstance<AgentFlowNode, Edge> | null>(null);
+  useEffect(() => {
+    if (!inst) return;
+    const t = setTimeout(() => inst.fitView({ padding: 0.25, duration: 250 }), 50);
+    return () => clearTimeout(t);
+  }, [inst, nodes.length]);
+
   return (
-    <div className="h-full min-h-72 w-full">
+    <div className="h-72 min-h-72 w-full sm:h-80">
       <ReactFlow
+        onInit={setInst}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}

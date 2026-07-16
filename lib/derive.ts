@@ -131,3 +131,11 @@ export function deriveConsoleState(
     eventCount,
   };
 }
+
+/** The executor sometimes emits markdown emphasis; the console renders plain text. */
+export function stripMdLite(s: string): string {
+  return s
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/(^|\s)\*(\S[^*]*\S)\*(?=\s|$)/g, "$1$2")
+    .replace(/`([^`]+)`/g, "$1");
+}

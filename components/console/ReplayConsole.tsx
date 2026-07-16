@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import type { NeroUIMessage } from "@/ai/types";
-import { deriveConsoleState } from "@/lib/derive";
+import { deriveConsoleState, stripMdLite } from "@/lib/derive";
 import { AgentGraph } from "@/components/graph/AgentGraph";
 import { StyleRank } from "@/components/console/StyleRank";
 import { MetricsPanel } from "@/components/console/MetricsPanel";
@@ -90,7 +90,7 @@ export function ReplayConsole({
             <div className="p-4">
               {state.finalText ? (
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-bone/90">
-                  {state.finalText}
+                  {stripMdLite(state.finalText)}
                 </p>
               ) : (
                 <p className="font-mono text-xs text-mist">

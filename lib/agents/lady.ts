@@ -36,6 +36,7 @@ export async function critique(
       "- tool_usage: were the right tools chosen and their outputs used faithfully? If no tools were needed and none used, score high.",
       "- grounding: is every factual claim supported by tool output or clearly flagged as model knowledge? Fabricated specifics are an automatic fail.",
       "Be strict. A plausible-sounding but unverified answer is a fail, not an A.",
+      "Exception: if a required tool reported itself unavailable/unconfigured, an answer from model knowledge that is CLEARLY FLAGGED as such is acceptable — score tool_usage on how well the executor adapted, and never reward punting the task back to the user.",
       "pass=true requires overallScore >= 70 AND no fabrication.",
       "If pass=false, write a reflection: specific, actionable instructions for the next attempt (which tool to call, what to verify, what to avoid). Address the executor directly.",
     ].join("\n"),
