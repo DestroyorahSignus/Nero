@@ -1,16 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type {
-  AgentStepData,
-  ToolCallData,
-  ReflectionData,
-} from "@/ai/types";
-
-type TraceEntry =
-  | { kind: "agent"; key: string; data: AgentStepData }
-  | { kind: "tool"; key: string; data: ToolCallData }
-  | { kind: "reflection"; key: string; data: ReflectionData };
+import type { TraceEntry } from "@/lib/derive";
 
 const clip = (v: unknown, n = 400): string => {
   const s = typeof v === "string" ? v : JSON.stringify(v, null, 2);

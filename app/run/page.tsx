@@ -4,16 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import type {
-  NeroUIMessage,
-  PlanData,
-  AgentStepData,
-  ToolCallData,
-  ReflectionData,
-  VerdictData,
-  MetricsData,
-  RunStatusData,
-} from "@/ai/types";
+import type { NeroUIMessage } from "@/ai/types";
 import { AgentGraph } from "@/components/graph/AgentGraph";
 import { StyleRank } from "@/components/console/StyleRank";
 import { MetricsPanel } from "@/components/console/MetricsPanel";
@@ -23,10 +14,10 @@ import { ComboMeter } from "@/components/console/ComboMeter";
 import { RunHistory } from "@/components/console/RunHistory";
 import { CutPanel } from "@/components/ui/CutPanel";
 import { KeyVault, readVault } from "@/components/console/KeyVault";
-import {
-  TraceTimeline,
-  type TraceEntry,
-} from "@/components/console/TraceTimeline";
+import { TraceTimeline } from "@/components/console/TraceTimeline";
+import { SpanWaterfall } from "@/components/console/SpanWaterfall";
+import { ApprovalCard } from "@/components/console/ApprovalCard";
+import { deriveConsoleState } from "@/lib/derive";
 
 const MISSIONS = [
   "Compute the 40th Fibonacci number exactly",
@@ -49,14 +40,25 @@ export default function RunConsole() {
   const [deploy, setDeploy] = useState<DeployStatus | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
   const [vaultOpen, setVaultOpen] = useState(false);
+  const [safeMode, setSafeMode] = useState(true);
   const [hasClientKey, setHasClientKey] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setHasClientKey(Boolean(readVault().apiKey));
+    setSafeMode(window.sessionStorage.getItem("nero-safemode") !== "0");
   }, []);
 
+  const toggleSafeMode = () => {
+    setSafeMode((v) => {
+      window.sessionStorage.setItem("nero-safemode", v ? "0" : "1");
+      return !v;
+    });
+  };
+
+  const [chatId] = useState(() => crypto.randomUUID());
   const { messages, sendMessage, status } = useChat<NeroUIMessage>({
+    id: chatId,
     transport: new DefaultChatTransport({
       api: "/api/agent",
       // Resolved fresh on every request: BYOK keys ride as headers,
@@ -67,6 +69,8 @@ export default function RunConsole() {
         if (v.apiKey) h["x-nero-api-key"] = v.apiKey;
         if (v.provider) h["x-nero-provider"] = v.provider;
         if (v.tavilyKey) h["x-nero-tavily-key"] = v.tavilyKey;
+        h["x-nero-approval"] =
+          window.sessionStorage.getItem("nero-safemode") !== "0" ? "on" : "off";
         return h;
       },
     }),
@@ -94,91 +98,8 @@ export default function RunConsole() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Derive the whole console state from the latest assistant message parts.
-  const state = useMemo(() => {
-    const assistant = [...messages]
-      .reverse()
-      .find((m) => m.role === "assistant");
-
-    let plan: PlanData | null = null;
-    const agentSteps = new Map<string, AgentStepData>();
-    const toolCalls = new Map<string, ToolCallData>();
-    const reflections = new Map<string, ReflectionData>();
-    let verdict: VerdictData | null = null;
-    let metrics: MetricsData | null = null;
-    let runStatus: RunStatusData | null = null;
-    const trace: TraceEntry[] = [];
-    let finalText = "";
-    let eventCount = 0;
-
-    for (const part of assistant?.parts ?? []) {
-      switch (part.type) {
-        case "data-plan":
-          plan = part.data;
-          eventCount += 1;
-          break;
-        case "data-agent-step": {
-          const key = part.id ?? crypto.randomUUID();
-          if (!agentSteps.has(key)) {
-            trace.push({ kind: "agent", key, data: part.data });
-          } else {
-            const idx = trace.findIndex((t) => t.key === key);
-            if (idx >= 0) trace[idx] = { kind: "agent", key, data: part.data };
-          }
-          agentSteps.set(key, part.data);
-          eventCount += 1;
-          break;
-        }
-        case "data-tool-call": {
-          const key = part.id ?? part.data.callId;
-          if (!toolCalls.has(key)) {
-            trace.push({ kind: "tool", key, data: part.data });
-          } else {
-            const idx = trace.findIndex((t) => t.key === key);
-            if (idx >= 0) trace[idx] = { kind: "tool", key, data: part.data };
-          }
-          toolCalls.set(key, part.data);
-          eventCount += 1;
-          break;
-        }
-        case "data-reflection": {
-          const key = part.id ?? `r-${part.data.attempt}`;
-          if (!reflections.has(key)) {
-            trace.push({ kind: "reflection", key, data: part.data });
-          }
-          reflections.set(key, part.data);
-          eventCount += 1;
-          break;
-        }
-        case "data-verdict":
-          verdict = part.data;
-          eventCount += 1;
-          break;
-        case "data-metrics":
-          metrics = part.data;
-          break;
-        case "data-run-status":
-          runStatus = part.data;
-          break;
-        case "text":
-          finalText = part.text; // last text part wins (fresh per attempt)
-          eventCount += 1;
-          break;
-      }
-    }
-
-    return {
-      plan,
-      agentSteps: [...agentSteps.values()],
-      toolCalls: [...toolCalls.values()],
-      verdict,
-      metrics,
-      runStatus,
-      trace,
-      finalText,
-      eventCount,
-    };
-  }, [messages]);
+  // One shared fold: parts -> console state (same function powers replay).
+  const state = useMemo(() => deriveConsoleState(messages), [messages]);
 
   // Refresh the mission log when a run reaches a terminal phase
   const phase = state.runStatus?.phase;
@@ -237,6 +158,17 @@ export default function RunConsole() {
               }
             />
             <button
+              onClick={toggleSafeMode}
+              title="Safe mode gates run_js behind operator approval"
+              className={`font-mono cut-sm border px-2 py-1 text-[9px] tracking-widest transition ${
+                safeMode
+                  ? "border-ember/60 bg-ember/10 text-ember"
+                  : "border-edge text-mist hover:text-bone"
+              }`}
+            >
+              SAFE MODE {safeMode ? "ON" : "OFF"}
+            </button>
+            <button
               onClick={() => setVaultOpen(true)}
               className="font-display cut-sm border border-spectral/60 bg-spectral/5 px-3 py-1 text-[10px] font-semibold tracking-widest text-spectral transition hover:bg-spectral/20"
             >
@@ -288,6 +220,17 @@ export default function RunConsole() {
         {!hasClientKey && deploy && !deploy.serverKeyConfigured && (
           <p className="font-mono mt-3 border-l-2 border-ember pl-3 text-[10px] leading-relaxed text-ember">
             No API key on this deployment — missions will fail. Hit{" "}
+            <button
+              onClick={toggleSafeMode}
+              title="Safe mode gates run_js behind operator approval"
+              className={`font-mono cut-sm border px-2 py-1 text-[9px] tracking-widest transition ${
+                safeMode
+                  ? "border-ember/60 bg-ember/10 text-ember"
+                  : "border-edge text-mist hover:text-bone"
+              }`}
+            >
+              SAFE MODE {safeMode ? "ON" : "OFF"}
+            </button>
             <button
               onClick={() => setVaultOpen(true)}
               className="underline underline-offset-2 hover:text-bone"
@@ -343,7 +286,19 @@ export default function RunConsole() {
             <p className="font-mono mt-0.5 text-[10px] tracking-wider text-mist">
               {state.runStatus.message}
             </p>
+            <ShareReplay sessionId={chatId} />
           </div>
+        </section>
+      )}
+
+      {/* ── Pending approvals ────────────────────────────────── */}
+      {state.approvals.some((a) => a.data.status === "pending") && (
+        <section className="mx-auto max-w-6xl space-y-3 px-6 pt-6">
+          {state.approvals
+            .filter((a) => a.data.status === "pending")
+            .map((a) => (
+              <ApprovalCard key={a.id} id={a.id} data={a.data} />
+            ))}
         </section>
       )}
 
@@ -404,6 +359,11 @@ export default function RunConsole() {
           <MetricsPanel metrics={state.metrics} />
 
           <CutPanel>
+            <PanelTitle>PHASE SPANS</PanelTitle>
+            <SpanWaterfall spans={state.spans} />
+          </CutPanel>
+
+          <CutPanel>
             <PanelTitle>VERGIL&apos;S PLAN</PanelTitle>
             <PlanChecklist plan={state.plan} />
           </CutPanel>
@@ -421,6 +381,24 @@ export default function RunConsole() {
         onChange={setHasClientKey}
       />
     </main>
+  );
+}
+
+function ShareReplay({ sessionId }: { sessionId: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        const url = `${window.location.origin}/run/${sessionId}`;
+        void navigator.clipboard.writeText(url).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1600);
+        });
+      }}
+      className="font-mono mt-2 text-[9px] tracking-widest text-mist underline-offset-2 hover:text-bone hover:underline"
+    >
+      {copied ? "REPLAY LINK COPIED ✓" : "⎘ COPY REPLAY PERMALINK"}
+    </button>
   );
 }
 

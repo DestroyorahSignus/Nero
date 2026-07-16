@@ -31,6 +31,8 @@ const silentSink: OrchestratorSink = {
     process.stdout.write(`    ↻ reflection: ${d.reflection.slice(0, 100)}…\n`),
   metrics: () => {},
   status: () => {},
+  approval: () => {},
+  span: () => {},
   textDelta: () => {},
   resetText: () => {},
 };
@@ -75,7 +77,10 @@ async function main() {
         tokens += budget.totalTokens;
         cost += budget.estCostUsd;
       } else {
-        const res = await runNero(task.goal, `eval-${task.id}-${Date.now()}`, silentSink);
+        // No operator at the CLI — approvals off so run_js executes freely.
+        const res = await runNero(task.goal, `eval-${task.id}-${Date.now()}`, silentSink, {
+          approvalMode: false,
+        });
         answer = res.answer;
         attempts = res.attempts;
         tokens += res.budget.totalTokens;

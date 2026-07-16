@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { streamObject } from "ai";
 import { resolveModel } from "@/lib/providers";
 import { PlanSchema, type Plan } from "./schemas";
 import type { TokenBudget } from "@/lib/budget";
@@ -14,6 +14,7 @@ export async function plan(
   goal: string,
   budget: TokenBudget,
   reflections: StoredReflection[],
+  onPartial?: (partial: unknown) => void,
 ): Promise<Plan> {
   const toolCatalog = Object.entries(TOOL_META)
     .map(([name, meta]) => `- ${name} (${meta.server}): ${meta.blurb}`)
@@ -26,7 +27,7 @@ export async function plan(
           .join("\n")}`
       : "";
 
-  const { object, usage } = await generateObject({
+  const result = streamObject({
     model: resolveModel("planner"),
     schema: PlanSchema,
     system: [
@@ -42,6 +43,13 @@ export async function plan(
     ].join("\n"),
     prompt: `Goal: ${goal}${reflectionBlock}`,
   });
-  budget.record(usage);
+
+  // The plan checklist fills in live as schema-conformant fragments stream.
+  for await (const partial of result.partialObjectStream) {
+    onPartial?.(partial);
+  }
+
+  const object = await result.object; // fully validated against PlanSchema
+  budget.record(await result.usage);
   return object;
 }

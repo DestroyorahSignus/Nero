@@ -66,6 +66,24 @@ export interface MetricsData {
   budgetTokens: number;
 }
 
+export interface ApprovalData {
+  toolName: string;
+  input: unknown;
+  status: "pending" | "approved" | "denied" | "timeout";
+  attempt: number;
+  reason?: string;
+}
+
+export interface SpanData {
+  label: string;
+  role: "planner" | "executor" | "critic";
+  attempt: number;
+  /** ms offset from run start */
+  startMs: number;
+  durMs: number;
+  tokens: number;
+}
+
 export interface RunStatusData {
   phase:
     | "planning"
@@ -91,6 +109,8 @@ export type NeroDataParts = {
   verdict: VerdictData;
   metrics: MetricsData;
   "run-status": RunStatusData;
+  approval: ApprovalData;
+  span: SpanData;
 };
 
 export type NeroUIMessage = UIMessage<never, NeroDataParts>;

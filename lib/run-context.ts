@@ -14,6 +14,8 @@ export interface RunConfig {
   provider?: ProviderId;
   apiKey?: string;
   tavilyKey?: string;
+  /** HITL: gate dangerous tools behind operator approval (default on). */
+  approvalMode?: boolean;
 }
 
 const storage = new AsyncLocalStorage<RunConfig>();

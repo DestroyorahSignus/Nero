@@ -33,6 +33,16 @@ recovery from bad tool output, and measurement** — so NERO makes them the prod
   `/api/mcp/mcp`. Point Claude Desktop or Cursor at your deployment and use the same tools.
 - **Measured** — a 20-task eval suite with programmatic ground-truth checks and a
   `--bare` executor-only ablation, so the loop's lift is a number.
+- **Human-in-the-loop** — SAFE MODE gates `run_js` behind a live operator verdict:
+  the run pauses mid-stream, an approval card slides in, ALLOW/DENY resolves it over
+  a side channel. Fails closed on a 90s timeout.
+- **Injection-hardened** — fetched web content is fenced as untrusted data and can
+  never reach code execution without passing the human gate (defense in depth against
+  OWASP LLM01).
+- **Shareable replays** — every finished run becomes a permalink at `/run/<id>`:
+  full trace, span waterfall, and verdict, viewable at zero token cost.
+- **Observable** — a per-phase span waterfall (planner/executor/critic × latency ×
+  tokens) streams live; the mission log links every historical run to its replay.
 
 ## The crew
 

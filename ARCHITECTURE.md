@@ -18,7 +18,10 @@
 6. [YAMATO — the MCP gateway](#6-yamato--the-mcp-gateway)
 7. [The arsenal (tool servers)](#7-the-arsenal-tool-servers)
 8. [Guardrails](#8-guardrails)
+   - [The human-in-the-loop gate](#81-the-human-in-the-loop-gate)
+   - [Prompt-injection defense](#82-prompt-injection-defense)
 9. [Streaming architecture](#9-streaming-architecture)
+   - [Shareable run replay](#91-shareable-run-replay)
 10. [The console UI](#10-the-console-ui)
 11. [REBELLION — the eval suite](#11-rebellion--the-eval-suite)
 12. [Provider abstraction](#12-provider-abstraction)
@@ -175,13 +178,13 @@ The design follows Anthropic's "Building Effective Agents" guidance: simple, com
 
 ### 4.1 VERGIL — planner
 
-**File:** `lib/agents/vergil.ts` · **Primitive:** `generateObject` + Zod `PlanSchema`
+**File:** `lib/agents/vergil.ts` · **Primitive:** `streamObject` + Zod `PlanSchema`
 
 VERGIL decomposes the goal into an ordered, minimal set of steps — then steps back. It never executes anything.
 
 ```mermaid
 flowchart LR
-    IN[goal + tool catalog + prior reflections] --> GO["generateObject<br/>(schema-constrained decoding)"]
+    IN[goal + tool catalog + prior reflections] --> GO["streamObject<br/>(schema-constrained decoding,<br/>streamed as partial fragments)"]
     GO --> P["Plan (validated)"]
     P --> S1["strategy: one sentence"]
     P --> S2["steps 1–6, each with:<br/>· title<br/>· toolHint (enum)<br/>· successCriteria (checkable)"]
@@ -189,7 +192,7 @@ flowchart LR
 
 **Why schema-validated planning matters:**
 
-- `generateObject` constrains the model to emit JSON matching `PlanSchema` — the plan **cannot** be malformed prose. Downstream code never parses free text.
+- `streamObject` constrains the model to emit JSON matching `PlanSchema` — the plan **cannot** be malformed prose. Downstream code never parses free text. The `partialObjectStream` is forwarded to the UI as it decodes, so the plan checklist **materializes step by step**; the final object is still fully schema-validated before execution.
 - `toolHint` is a Zod **enum of actual tool names** (+`none`). The planner physically cannot plan around a tool that doesn't exist — a whole hallucination class deleted at the type level.
 - Every step requires a **concrete success criterion** ("the exact integer is stated", not "the answer is good"). LADY judges against these later, closing the plan→verify loop.
 - The prompt caps plans at 1–3 steps unless genuinely necessary. Over-decomposition is a real failure mode: more steps = more tokens = more places to go wrong.
@@ -331,6 +334,7 @@ flowchart TB
 - **Local** is the correct engineering default when agent and tools ship in the same deployment — adding an HTTP hop to call your own process is architecture theater.
 - **Remote** exists to prove the protocol is real: flip one env var and the exact same run flows through a genuine MCP client → Streamable HTTP → MCP server round-trip. The MCP server is also independently useful — **point Claude Desktop or Cursor at `https://<your-app>/api/mcp/mcp`** and they get NERO's arsenal.
 - The route exports `GET`, `POST` **and** `DELETE` — MCP initialize arrives over POST, stream reads over GET; export only POST and clients see empty capabilities (a real-world gotcha).
+- Every tool ships **MCP spec tool annotations** (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so protocol-aware hosts can reason about blast radius. Per the spec these are *hints* — NERO's own approval gate never trusts them; enforcement lives in `withApprovalGate`, not in metadata.
 - `redisUrl` enables Streamable HTTP session resumption across serverless instances; stateless tool calls work without it.
 
 ---
@@ -350,6 +354,8 @@ flowchart TB
 ```
 
 The unconfigured-search path is the interesting part: instead of throwing or hallucinating, the tool returns a **structured explanation the model can route around**. Honest degradation is a feature, not an apology.
+
+Fetched text also comes back **fenced as untrusted data** — wrapped in `<<<UNTRUSTED_WEB_CONTENT>>>` sentinels with a security notice — the first layer of the prompt-injection defense described in [§8.2](#82-prompt-injection-defense).
 
 ### NICO — code sandbox (`lib/tools/nico.ts`)
 
@@ -387,6 +393,42 @@ flowchart TB
 
 Why this is non-negotiable: Reflexion-style loops cost roughly **10–30× a single pass**. A public demo without a hard cap is an open invitation to drain your API account. When the budget trips, the run ends gracefully with `budget_exceeded` and returns the best answer so far.
 
+### 8.1 The human-in-the-loop gate
+
+**Files:** `lib/approvals.ts`, `app/api/approve/route.ts`, `components/console/ApprovalCard.tsx`
+
+SAFE MODE (on by default, toggled in the console header) gates dangerous tools — currently `run_js` — behind a live operator verdict. The mechanism is a **side-channel approval**: the streaming run stays alive while the tool's `execute()` blocks on a decision that arrives over a separate HTTP request.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant A as /api/agent (streaming run)
+    participant G as withApprovalGate
+    participant S as Approval store (Redis / mem)
+    participant P as /api/approve
+
+    A->>G: NERO calls run_js
+    G->>S: open(id) = pending
+    G-->>B: data-approval (status pending) — ApprovalCard renders
+    Note over G: execute() blocks, polling the store
+    B->>P: POST { id, approved }
+    P->>S: decide(id)
+    G->>S: poll sees verdict
+    alt approved
+        G->>G: run the real execute()
+    else denied or 90s timeout
+        G-->>A: structured ok:false error — agent adapts
+    end
+    G-->>B: data-approval (final status) — same id, card reconciles in place
+```
+
+Design properties worth defending in an interview: it **fails closed** (no verdict in 90s = deny); a denial is a **structured tool error the agent reasons about**, not a crash; enforcement lives at the YAMATO gateway layer (`withApprovalGate`), so web content or a jailbroken plan can never reach code execution without a human; and double-decides / unknown ids are rejected. The trade-off vs. the AI SDK's native `toolApproval` re-send flow is deliberate: NERO's Reflexion loop runs server-side in one stream, so pausing-and-re-POSTing the whole conversation would tear the loop apart — the side channel keeps the state machine intact. On multi-instance serverless, Redis carries the verdict across instances; the in-memory fallback covers dev.
+
+### 8.2 Prompt-injection defense
+
+Prompt injection is OWASP's #1 LLM risk two editions running, and there is no cure — only defense in depth. NERO ships two layers: **(1) data fencing** — everything `web_fetch` returns is wrapped in `UNTRUSTED_WEB_CONTENT` sentinels plus a security notice, and the executor's instructions state that fenced content is data that can never issue instructions, change the goal, or request tools; **(2) capability minimization** — even a successful injection cannot reach `run_js` without passing the human approval gate above. The layers compose: the first makes injection unlikely to steer the model, the second bounds the blast radius when it does.
+
+
 ---
 
 ## 9. Streaming architecture
@@ -415,6 +457,8 @@ flowchart LR
 | `data-tool-call` | name, input, output, latency, status | `tool-{callId}` |
 | `data-reflection` | critique + reflection text | `reflection-{attempt}` |
 | `data-verdict` | score, rank, pass, criteria | `verdict-{attempt}` |
+| `data-approval` | tool, input, pending/approved/denied/timeout | `approval-{uuid}` |
+| `data-span` | phase label, start/duration ms, tokens | `span-{role}-{attempt}` |
 | `data-metrics` | tokens, cost, latency, budget | `metrics` (fixed) |
 | `data-run-status` | phase + human message | `run-status` (fixed) |
 
@@ -423,6 +467,23 @@ Three mechanisms doing the heavy lifting:
 1. **ID-based reconciliation.** Writing a part with an existing `id` *updates it in place*. A tool call is written once as `running` and again as `done` with the same id — the UI row and graph node animate through states instead of duplicating. Fixed-id parts (`metrics`) are a single continuously-updating cell.
 2. **Fresh text part per attempt.** `sink.resetText()` closes the current text part before each execution attempt, so a retry's answer never concatenates onto the failed one. The client renders the **last** text part.
 3. **Full-stack type safety.** `NeroUIMessage = UIMessage<never, NeroDataParts>` means the server cannot write a part shape the client doesn't know, and the client switch over `part.type` is exhaustively typed. Adding a part type is a compile-error-guided tour of exactly the code that must change.
+
+### 9.1 Shareable run replay
+
+**Files:** `app/run/[sessionId]/page.tsx`, `components/console/ReplayConsole.tsx`, `lib/derive.ts`
+
+Because the console is pure derived state, replay is nearly free: `createUIMessageStream`'s `onFinish` snapshots the final `UIMessage[]` into TRISH (`nero:replay:*`, 7-day TTL on Redis), and the permalink route folds the stored parts through **the exact same `deriveConsoleState` function** the live console uses. Same graph, same trace, same rank slam — zero API spend to view.
+
+```mermaid
+flowchart LR
+    RUN[run finishes] -->|onFinish snapshot| T[(TRISH<br/>nero:replay:id)]
+    T --> P["/run/[sessionId]<br/>server component"]
+    P --> D[deriveConsoleState<br/>— shared with live console]
+    D --> R[ReplayConsole<br/>read-only, REPLAY badge]
+    SHARE[Share button after a run] -->|copies| URL([permalink])
+```
+
+This turns every demo into a link: run a mission once, send the URL, and a recruiter watches the full trace without spending a token. The mission log links each historical run to its replay. Deliberately **not** implemented: live resumable streams (`resumable-stream` + Next.js `after()`) — heavier machinery whose reference implementation ships unauthenticated stream re-attachment; a snapshot has none of those problems.
 
 ---
 
@@ -446,7 +507,9 @@ flowchart TB
         CM["ComboMeter: fills on events,<br/>bleeds on inactivity"]
         MP["MetricsPanel: 6 cells + budget burn bar"]
         PC["PlanChecklist: VERGIL's steps"]
-        RH["RunHistory: TRISH's mission log"]
+        RH["RunHistory: TRISH's mission log — rows link to replays"]
+        SW["SpanWaterfall: per-phase latency + token bars"]
+        AC["ApprovalCard: mid-run ALLOW / DENY"]
     end
     HEADER --> MAIN
     HEADER --> SIDE
@@ -553,6 +616,9 @@ flowchart TB
 | Fresh text part per attempt | Append to one text stream | A retry's answer must replace, not concatenate with, the failed attempt's answer. |
 | Conservative flat-rate cost estimate | Per-provider price tables | An upper bound that's simple and honest beats a precise number that's stale the day a provider changes pricing. |
 | Programmatic eval checks | LLM-graded evals | The harness that validates the LLM loop shouldn't itself be an LLM opinion — circular judging. |
+| Side-channel HITL approval | AI SDK `toolApproval` re-send flow | The Reflexion loop runs server-side in one stream; pausing and re-POSTing the conversation would dismantle the state machine. The side channel keeps the loop alive and the approval store carries verdicts across serverless instances. |
+| Snapshot replay | Resumable live streams | Snapshot reuses the derived-state fold and costs nothing to view; the resumable-stream reference pattern couples to `after()` and re-attaches streams without auth. Scoped out on purpose. |
+| Custom span waterfall | Full OpenTelemetry export | The spans NERO needs (phase × latency × tokens) are four fields; an OTel pipeline (`@ai-sdk/otel` + Langfuse) is the documented upgrade path when a real backend is warranted. |
 
 ---
 
@@ -597,7 +663,8 @@ nero/
 │   ├── page.tsx                # landing: glitch hero, crew, arsenal
 │   ├── run/page.tsx            # the console — all state derived from parts
 │   └── api/
-│       ├── agent/route.ts      # streaming orchestrator endpoint
+│       ├── agent/route.ts      # streaming orchestrator endpoint (+ replay snapshot)
+│       ├── approve/route.ts    # human side of the HITL gate
 │       ├── mcp/[transport]/route.ts  # the arsenal as a real MCP server
 │       ├── status/route.ts     # deployment config for header chips
 │       └── runs/route.ts       # TRISH's mission log
@@ -609,6 +676,9 @@ nero/
         ├── StyleRank.tsx       # the signature: D→SSS rank slam + ladder
         ├── PhaseTracker.tsx    # PLAN → EXECUTE → JUDGE stepper
         ├── ComboMeter.tsx      # event-throughput gauge, DMC style
+        ├── ApprovalCard.tsx    # mid-run ALLOW / DENY card
+        ├── SpanWaterfall.tsx   # per-phase latency + token attribution
+        ├── ReplayConsole.tsx   # read-only console for replay permalinks
         ├── TraceTimeline.tsx   # expandable step/tool/reflection log
         ├── MetricsPanel.tsx    # tokens · cost · latency · budget burn
         ├── PlanChecklist.tsx   # VERGIL's plan as a mission checklist

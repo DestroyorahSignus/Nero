@@ -4,7 +4,8 @@ import { critique as ladyCritique } from "./lady";
 import { drawYamato } from "@/lib/mcp/yamato";
 import { trish } from "@/lib/memory/trish";
 import { TokenBudget, MAX_REFLECTIONS } from "@/lib/budget";
-import { withRunConfig, type RunConfig } from "@/lib/run-context";
+import { withRunConfig, runConfig, type RunConfig } from "@/lib/run-context";
+import { ApprovalBroker, withApprovalGate } from "@/lib/approvals";
 import { scoreToRank } from "@/ai/types";
 import type {
   PlanData,
@@ -14,6 +15,8 @@ import type {
   ReflectionData,
   MetricsData,
   RunStatusData,
+  ApprovalData,
+  SpanData,
 } from "@/ai/types";
 import type { Verdict } from "./schemas";
 
@@ -36,6 +39,8 @@ export interface OrchestratorSink {
   reflection: (id: string, data: ReflectionData) => void;
   metrics: (data: MetricsData) => void;
   status: (data: RunStatusData) => void;
+  approval: (id: string, data: ApprovalData) => void;
+  span: (id: string, data: SpanData) => void;
   textDelta: (delta: string) => void;
   /** Close the current text part; the next delta opens a fresh one (per attempt). */
   resetText: () => void;
@@ -85,6 +90,37 @@ async function runNeroInner(
   let verdict: Verdict | null = null;
   let attempt = 0;
 
+  // Observability: wall-clock + token span per agent phase (waterfall UI).
+  const span = async <T>(
+    label: string,
+    role: SpanData["role"],
+    fn: () => Promise<T>,
+  ): Promise<T> => {
+    const startMs = Date.now() - t0;
+    const tokensBefore = budget.totalTokens;
+    const result = await fn();
+    sink.span(`span-${role}-${attempt}`, {
+      label,
+      role,
+      attempt,
+      startMs,
+      durMs: Date.now() - t0 - startMs,
+      tokens: budget.totalTokens - tokensBefore,
+    });
+    return result;
+  };
+
+  // HITL: dangerous tools pause the stream for an operator verdict.
+  const broker = new ApprovalBroker(
+    (id, data) => sink.approval(id, data),
+    () => attempt,
+  );
+  const gatedTools = withApprovalGate(
+    yamato.tools,
+    broker,
+    runConfig().approvalMode ?? true,
+  );
+
   try {
     while (attempt <= MAX_REFLECTIONS) {
       attempt += 1;
@@ -98,7 +134,32 @@ async function runNeroInner(
         status: "running",
         attempt,
       });
-      const planObj = await vergilPlan(goal, budget, reflections);
+      const planAttempt = attempt;
+      const planObj = await span("VERGIL plans", "planner", () =>
+        vergilPlan(goal, budget, reflections, (partial) => {
+          const p = partial as {
+            strategy?: string;
+            steps?: ({ title?: string; toolHint?: string; successCriteria?: string } | undefined)[];
+          };
+          sink.plan(`plan-${planAttempt}`, {
+            goal,
+            strategy: p.strategy ?? "…",
+            attempt: planAttempt,
+            steps: (p.steps ?? []).flatMap((st, i) =>
+              st?.title
+                ? [{
+                    index: i,
+                    title: st.title,
+                    toolHint:
+                      st.toolHint && st.toolHint !== "none" ? st.toolHint : null,
+                    successCriteria: st.successCriteria ?? "…",
+                    status: "pending" as const,
+                  }]
+                : [],
+            ),
+          });
+        }),
+      );
       sink.agentStep(`vergil-${attempt}`, {
         agent: "VERGIL",
         label: "Decompose goal",
@@ -133,10 +194,11 @@ async function runNeroInner(
       const toolTrace: { toolName: string; input: unknown; output: unknown }[] = [];
       const pendingInputs = new Map<string, unknown>();
 
-      const { text, toolCallCount } = await neroExecute(
+      const { text, toolCallCount } = await span("NERO executes", "executor", () =>
+        neroExecute(
         goal,
         planObj,
-        yamato.tools,
+        gatedTools,
         budget,
         reflections,
         {
@@ -171,7 +233,7 @@ async function runNeroInner(
           },
           onTextDelta: (delta) => sink.textDelta(delta),
         },
-      );
+      ));
       totalToolCalls += toolCallCount;
       answer = text;
       sink.agentStep(`nero-${attempt}`, {
@@ -192,7 +254,9 @@ async function runNeroInner(
         status: "running",
         attempt,
       });
-      verdict = await ladyCritique(goal, planObj, answer, toolTrace, budget);
+      verdict = await span("LADY judges", "critic", () =>
+        ladyCritique(goal, planObj, answer, toolTrace, budget),
+      );
       const rank = scoreToRank(verdict.overallScore);
       sink.agentStep(`lady-${attempt}`, {
         agent: "LADY",

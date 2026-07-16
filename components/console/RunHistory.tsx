@@ -50,7 +50,11 @@ export function RunHistory({ refreshKey }: { refreshKey: number }) {
   return (
     <ol className="panel-scroll max-h-64 divide-y divide-edge overflow-y-auto">
       {runs.map((r) => (
-        <li key={`${r.sessionId}-${r.at}`} className="flex items-center gap-3 px-4 py-2.5">
+        <li key={`${r.sessionId}-${r.at}`}>
+          <a
+            href={`/run/${r.sessionId}`}
+            className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-void/40"
+          >
           <span
             className={`font-display w-9 shrink-0 text-lg font-bold italic ${rankColor(r.rank)}`}
           >
@@ -63,6 +67,7 @@ export function RunHistory({ refreshKey }: { refreshKey: number }) {
               {r.totalTokens.toLocaleString()} tok · {(r.elapsedMs / 1000).toFixed(1)}s · {ago(r.at)}
             </p>
           </div>
+          </a>
         </li>
       ))}
     </ol>

@@ -3,6 +3,7 @@ import {
   createUIMessageStreamResponse,
 } from "ai";
 import { runNero, type OrchestratorSink } from "@/lib/agents/orchestrator";
+import { trish } from "@/lib/memory/trish";
 import { isProviderId } from "@/lib/providers";
 import type { RunConfig } from "@/lib/run-context";
 import type { NeroUIMessage } from "@/ai/types";
@@ -42,6 +43,7 @@ export async function POST(req: Request) {
       providerHeader && isProviderId(providerHeader) ? providerHeader : undefined,
     apiKey: req.headers.get("x-nero-api-key") ?? undefined,
     tavilyKey: req.headers.get("x-nero-tavily-key") ?? undefined,
+    approvalMode: req.headers.get("x-nero-approval") !== "off",
   };
 
   const stream = createUIMessageStream<NeroUIMessage>({
@@ -63,6 +65,9 @@ export async function POST(req: Request) {
           writer.write({ type: "data-metrics", id: "metrics", data }),
         status: (data) =>
           writer.write({ type: "data-run-status", id: "run-status", data }),
+        approval: (id, data) =>
+          writer.write({ type: "data-approval", id, data }),
+        span: (id, data) => writer.write({ type: "data-span", id, data }),
         textDelta: (delta) => {
           if (!textOpen) {
             writer.write({ type: "text-start", id: textId });
@@ -84,6 +89,11 @@ export async function POST(req: Request) {
       if (textOpen) {
         writer.write({ type: "text-end", id: textId });
       }
+    },
+    onFinish: ({ messages }) => {
+      // Replay snapshot: the run becomes a shareable permalink at
+      // /run/<sessionId>. Fire-and-forget; replay is a nice-to-have.
+      void trish.saveReplay(sessionId, messages).catch(() => {});
     },
     onError: (error) => {
       console.error("[nero] run failed:", error);
