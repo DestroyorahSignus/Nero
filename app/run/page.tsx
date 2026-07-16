@@ -57,7 +57,7 @@ export default function RunConsole() {
   };
 
   const [chatId] = useState(() => crypto.randomUUID());
-  const { messages, sendMessage, status } = useChat<NeroUIMessage>({
+  const { messages, sendMessage, status, error } = useChat<NeroUIMessage>({
     id: chatId,
     transport: new DefaultChatTransport({
       api: "/api/agent",
@@ -119,6 +119,7 @@ export default function RunConsole() {
 
   const terminal =
     phase === "done" || phase === "failed" || phase === "budget_exceeded";
+  const streamError = status === "error" ? error : undefined;
 
   return (
     <main className="console-atmosphere min-h-screen pb-16">
@@ -253,6 +254,25 @@ export default function RunConsole() {
           ))}
         </div>
       </section>
+
+      {/* ── Stream error banner: a failed run must NEVER look frozen ── */}
+      {streamError && (
+        <section className="mx-auto max-w-6xl px-6 pt-6">
+          <div className="banner-slam cut border border-crimson bg-crimson/10 px-5 py-3" role="alert">
+            <p className="font-display text-lg font-bold italic tracking-wide text-crimson">
+              RUN ERROR
+            </p>
+            <p className="font-mono mt-0.5 text-[10px] leading-relaxed tracking-wider text-bone/80">
+              {streamError.message || "The run failed before completing."}
+            </p>
+            <p className="font-mono mt-1 text-[9px] text-mist">
+              Common causes: invalid/expired API key (check KEYS), a
+              decommissioned model id on the provider, or a provider outage.
+              Retry after fixing — the console resets on the next deploy.
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* ── Mission banner ───────────────────────────────────── */}
       {terminal && state.runStatus && (

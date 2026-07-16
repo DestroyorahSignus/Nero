@@ -32,10 +32,12 @@ const DEFAULTS: Record<ProviderId, Record<AgentRole, string>> = {
     executor: "gemini-2.5-flash",
     critic: "gemini-2.5-pro",
   },
+  // Groq rotates model ids aggressively (llama-3.3-70b-versatile was
+  // deprecated 2026-06-17); gpt-oss-120b is their recommended migration.
   groq: {
-    planner: "llama-3.3-70b-versatile",
-    executor: "llama-3.3-70b-versatile",
-    critic: "llama-3.3-70b-versatile",
+    planner: "openai/gpt-oss-120b",
+    executor: "openai/gpt-oss-120b",
+    critic: "openai/gpt-oss-120b",
   },
 };
 

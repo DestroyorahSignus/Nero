@@ -775,6 +775,11 @@ world.
   @upstash/redis@1 · Tailwind v4 (@theme tokens in globals.css).
 - LANDMINE: mcp-handler@1.1.0 peer-pins @modelcontextprotocol/sdk to
   EXACTLY 1.26.0. Do not bump the SDK independently — npm install fails.
+- LANDMINE: Groq rotates model ids aggressively (llama-3.3-70b-versatile
+  deprecated 2026-06-17 → symptom: run silently errors on PLAN). Groq
+  defaults now openai/gpt-oss-120b; the deprecations page at
+  console.groq.com/docs/deprecations is the source of truth. NERO_*_MODEL
+  env vars override without code changes.
 - Tailwind v4: design tokens live in app/globals.css under @theme
   (bg-void, text-spectral etc. resolve from --color-* vars). No
   tailwind.config file.
