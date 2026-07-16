@@ -742,3 +742,177 @@ nero/
 Built as a portfolio piece. The interesting parts are the boring parts:
 the budget that stops the loop, the critic that refuses to be impressed,
 and the eval suite that tells you whether any of it actually helped.
+
+---
+
+## 16. Session handoff — everything a fresh session needs
+
+This section exists so a brand-new working session (a new AI assistant
+chat, a new machine, or future-you after three months) can resume this
+project with zero archaeology. Read this and you know the state of the
+world.
+
+### 16.1 Project identity
+
+- Project: NERO — MCP-orchestrated planner→executor→critic multi-agent
+  system. AI Engineer portfolio piece (target: 40 LPA+ roles).
+- Owner: Saivarun (GitHub: DestroyorahSignus). Naming convention: Devil
+  May Cry characters — prior portfolio projects are SPARDA / DANTE /
+  VERGIL (a hybrid GraphRAG product-search system) and Zephyr V2 (an
+  ICD-10-CM medical-coding pipeline). NERO fills the AGENTIC
+  ORCHESTRATION gap: MCP, multi-agent loops, self-correction,
+  observability, HITL safety.
+- Repo: github.com/DestroyorahSignus/Nero (private as of this writing;
+  flip public after eval numbers land in README).
+- Constraint honored throughout: NO model training — inference-only via
+  provider APIs.
+
+### 16.2 Stack + pinned-version landmines
+
+- Node 22 (container was v22.22.x) · Next.js 16 (16.2.x, Turbopack
+  build) · Vercel AI SDK v7 (ai@7.0.29) · @ai-sdk/react@4 ·
+  @ai-sdk/mcp@2 · mcp-handler@1.1.0 · zod@4 · @xyflow/react@12 ·
+  @upstash/redis@1 · Tailwind v4 (@theme tokens in globals.css).
+- LANDMINE: mcp-handler@1.1.0 peer-pins @modelcontextprotocol/sdk to
+  EXACTLY 1.26.0. Do not bump the SDK independently — npm install fails.
+- Tailwind v4: design tokens live in app/globals.css under @theme
+  (bg-void, text-spectral etc. resolve from --color-* vars). No
+  tailwind.config file.
+- Fonts via next/font/google in app/layout.tsx: Chakra Petch (display),
+  IBM Plex Sans (body), IBM Plex Mono (data).
+
+### 16.3 AI SDK v7 API facts (verified against installed .d.ts, not docs)
+
+- ToolLoopAgent settings use `instructions`, NOT `system`.
+- agent.stream() lifecycle callbacks nest fields:
+  onToolExecutionStart receives { toolCall: { toolCallId, toolName,
+  input } }; onToolExecutionEnd receives { toolCall, toolOutput } where
+  toolOutput is a discriminated union — .type === "tool-result" has
+  .output, otherwise it's a tool error with .error.
+- createUIMessageStream onFinish receives { messages, isContinuation,
+  isAborted } — messages is the final UIMessage[] (replay snapshots
+  hook here).
+- DefaultChatTransport `headers` accepts a FUNCTION (Resolvable) —
+  resolved fresh per request; that's how BYOK keys ride from
+  sessionStorage.
+- streamObject: iterate result.partialObjectStream (DeepPartial —
+  guard undefined nested fields), then await result.object (validated)
+  and result.usage.
+- mcp-handler server.tool overload used:
+  server.tool(name, description, zodShape, annotations, handler).
+- The MCP route MUST export GET, POST and DELETE or clients see empty
+  capabilities.
+
+### 16.4 Architecture invariants (do not break these)
+
+1. Tools are defined ONCE in lib/tools/, consumed in-process AND via
+   the MCP server route. Never fork implementations.
+2. Every tool returns structured { ok: true|false } — never throw from
+   execute(); errors are data the agent reasons about.
+3. The orchestrator emits ONLY through the OrchestratorSink interface —
+   it must stay UI-agnostic (the CLI eval runner implements the same
+   sink). Adding a stream part = add to NeroDataParts (ai/types.ts) +
+   sink + route writer + lib/derive.ts + eval runner's silent sink.
+4. Stream parts reconcile by stable id — reuse the id to update a part
+   in place; that's what animates the UI.
+5. resetText() before each execution attempt — a retry's answer must
+   REPLACE, never concatenate.
+6. All state on the console is DERIVED from message parts via
+   lib/derive.ts (shared by live console + replay). No imperative
+   event handling.
+7. Everything fails closed: approval timeout = deny; budget trip =
+   graceful stop with best answer; missing keys = honest degradation.
+8. BYOK keys travel per-request via AsyncLocalStorage (lib/run-context)
+   — never module/global state, never logged, never persisted.
+9. The critic must never be a weaker model than the executor.
+
+### 16.5 Commands
+
+    npm install                  # (see 16.2 landmine if it fails)
+    npm run dev                  # localhost:3000, no keys needed for UI
+    npm run typecheck            # tsc --noEmit
+    npm run build                # next build — the real gate
+    npm run evals -- --bare      # ablation baseline (needs an API key)
+    npm run evals                # full loop (needs an API key)
+    npm run evals -- --only c1,d2
+
+Eval runner sets approvalMode:false internally (no operator at a CLI).
+
+### 16.6 Environment variables (all optional except one provider key)
+
+    LLM_PROVIDER=anthropic|openai|google|groq   (BYOK can override per request)
+    ANTHROPIC_API_KEY / OPENAI_API_KEY /
+    GOOGLE_GENERATIVE_AI_API_KEY / GROQ_API_KEY
+    NERO_PLANNER_MODEL / NERO_EXECUTOR_MODEL / NERO_CRITIC_MODEL
+    TAVILY_API_KEY               (arms web_search; degrades honestly without)
+    UPSTASH_REDIS_REST_URL/TOKEN (durable memory + cross-instance approvals)
+    REDIS_URL                    (mcp-handler session resumption)
+    NERO_TOKEN_BUDGET=150000     NERO_MAX_REFLECTIONS=2
+    YAMATO_MODE=local|remote     NERO_SELF_URL=https://<deploy>
+
+Request headers (client → /api/agent): x-nero-provider, x-nero-api-key,
+x-nero-tavily-key, x-nero-approval (on|off; missing = ON).
+
+### 16.7 Feature inventory (all built, typechecked, prod-built, smoke-tested)
+
+Core loop: VERGIL streamObject planner → NERO ToolLoopAgent executor
+(≤12 steps) → LADY rubric judge → Reflexion retry (≤3 attempts) with
+TRISH-stored reflections → TokenBudget hard cap.
+Arsenal: BLUE ROSE (web_search/web_fetch, injection-fenced), NICO
+(run_js, vm sandbox, 2s), KALINA ANN (csv_describe/csv_aggregate).
+MCP: real Streamable-HTTP server at /api/mcp/mcp (annotations on all
+tools); YAMATO dual-mode client (local | remote).
+Safety: SAFE MODE HITL gate (side-channel /api/approve, 90s fail-closed);
+prompt-injection fencing; BYOK key vault (sessionStorage +
+AsyncLocalStorage).
+UI: React Flow agent graph, trace timeline, DMC style-rank (D→SSS),
+combo meter, phase tracker, span waterfall, metrics + budget burn,
+plan checklist, mission log, deployment chips, key vault, approval
+cards, corner-cut design system, glitch hero.
+Replay: /run/[sessionId] permalinks from onFinish snapshots (7-day TTL
+on Redis); share button; mission-log links.
+Evals: REBELLION — 20 tasks (7 compute / 5 data / 4 reasoning / 4 web),
+programmatic checks, --bare ablation.
+
+### 16.8 Known gaps / next actions (in priority order)
+
+1. RUN THE EVALS and put both numbers (bare vs full) in README's table —
+   the headline metric is still "_run it_". Needs a provider key.
+2. Deploy to Vercel (repo import; maxDuration is 300 = Hobby-safe;
+   raise to 800 on Pro). Then set NERO_SELF_URL and demo
+   YAMATO_MODE=remote.
+3. Add Upstash (free tier) so approvals/memory/replays survive across
+   serverless instances — REQUIRED for SAFE MODE on multi-instance
+   deployments (in-memory fallback only works single-instance/dev).
+4. Flip the repo public + add the live demo link to the repo
+   description; record a 3-minute walkthrough video.
+5. Deferred by design (documented in §14 trade-offs — do not "fix"
+   without reading it): resumable live streams, OpenTelemetry export
+   (upgrade path: @ai-sdk/otel + Langfuse), MCP elicitation/sampling
+   (needs stateful sessions — broken on stateless Vercel HTTP),
+   AI SDK native toolApproval (would dismantle the single-stream loop).
+6. Nice-to-have ideas parked: /compare A/B run view (data exists via
+   replays + spans), conformal calibration on LADY's scores, parallel
+   execution of independent plan steps (needs dependency-aware
+   scheduler + budget enforcement across workers).
+
+### 16.9 Testing conventions used so far
+
+- Zero-key smoke tests: deterministic tools (NICO fib/timeout/no-require,
+  KALINA aggregates), eval ground-truth cross-checks, rank mapping.
+- Approval lifecycle unit tests (9 cases): approve/deny round-trips,
+  double-decide + unknown-id rejection, safe-tool passthrough, disabled
+  gate passthrough.
+- Live-server smoke: boot next start on a port, curl every route,
+  verify BYOK header reaches the provider (bogus key → provider 401
+  proves the chain), verify /api/approve validation, replay route 200
+  on unknown ids.
+- Mermaid: every ARCHITECTURE.md diagram is parse-validated headlessly
+  (mermaid + jsdom) before committing — GitHub renders no error boxes.
+
+### 16.10 Doc map
+
+- README.md — pitch, quickstart, BYOK, eval table (fill it!), deploy.
+- ARCHITECTURE.md — the deep dive, 19 Mermaid diagrams (GitHub-rendered).
+- GUIDE.md — this file: ASCII everything + this handoff section.
+- PLAN.md — the original build plan the repo was executed from.
