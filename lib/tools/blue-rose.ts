@@ -39,9 +39,14 @@ export const webSearch = tool({
       }),
     });
     if (!res.ok) {
+      const detail = (await res.text().catch(() => "")).slice(0, 200);
       return {
         ok: false as const,
-        error: `Search provider returned HTTP ${res.status}. Try a simpler query or fall back to web_fetch / own knowledge.`,
+        error: `Search provider returned HTTP ${res.status}${detail ? ` — ${detail}` : ""}. ${
+          res.status === 401
+            ? "The Tavily key was rejected (check it starts with tvly- and is active)."
+            : "Try a simpler query or fall back to web_fetch / own knowledge."
+        }`,
       };
     }
     const data = (await res.json()) as {

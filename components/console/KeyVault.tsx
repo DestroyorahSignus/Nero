@@ -62,7 +62,7 @@ export function KeyVault({
 }: {
   open: boolean;
   onClose: () => void;
-  onChange: (hasKey: boolean, provider: string) => void;
+  onChange: (hasKey: boolean, provider: string, hasTavily: boolean) => void;
 }) {
   const [form, setForm] = useState<VaultKeys>({
     provider: "",
@@ -95,14 +95,14 @@ export function KeyVault({
     } else {
       clearVault();
     }
-    onChange(Boolean(trimmed.apiKey), trimmed.provider);
+    onChange(Boolean(trimmed.apiKey), trimmed.provider, Boolean(trimmed.tavilyKey));
     onClose();
   };
 
   const clear = () => {
     clearVault();
     setForm({ provider: "", apiKey: "", tavilyKey: "" });
-    onChange(false, "");
+    onChange(false, "", false);
     onClose();
   };
 

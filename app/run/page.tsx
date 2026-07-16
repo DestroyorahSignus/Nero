@@ -43,6 +43,7 @@ export default function RunConsole() {
   const [safeMode, setSafeMode] = useState(true);
   const [hasClientKey, setHasClientKey] = useState(false);
   const [vaultProvider, setVaultProvider] = useState("");
+  const [hasClientTavily, setHasClientTavily] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -144,8 +145,12 @@ export default function RunConsole() {
                 <Chip label="YAMATO" value={deploy.yamatoMode} accent="text-arcane" />
                 <Chip
                   label="SEARCH"
-                  value={deploy.searchConfigured ? "armed" : "offline"}
-                  accent={deploy.searchConfigured ? "text-spectral" : "text-mist"}
+                  value={hasClientTavily || deploy.searchConfigured ? "armed" : "offline"}
+                  accent={
+                    hasClientTavily || deploy.searchConfigured
+                      ? "text-spectral"
+                      : "text-mist"
+                  }
                 />
                 <Chip
                   label="MEMORY"
@@ -403,9 +408,10 @@ export default function RunConsole() {
       <KeyVault
         open={vaultOpen}
         onClose={() => setVaultOpen(false)}
-        onChange={(hasKey, provider) => {
+        onChange={(hasKey, provider, hasTavily) => {
           setHasClientKey(hasKey);
           setVaultProvider(provider);
+          setHasClientTavily(hasTavily);
         }}
       />
     </main>
