@@ -65,6 +65,12 @@ export async function execute(
     ].join("\n"),
   });
 
+  // The AI SDK swallows a provider failure into the stream and then throws a
+  // generic NoOutputGeneratedError ("Check the stream for errors") with no
+  // cause — which would reach the operator instead of the real rate-limit /
+  // outage message. Capture the underlying error and rethrow that instead.
+  let streamError: unknown = null;
+
   const result = await agent.stream({
     prompt: `Goal: ${goal}${reflectionBlock}`,
     onToolExecutionStart: ({ toolCall }) => {
@@ -91,9 +97,16 @@ export async function execute(
     },
   });
 
-  for await (const delta of result.textStream) {
-    events.onTextDelta(delta);
+  // fullStream (not textStream) so the error part is visible to us.
+  try {
+    for await (const part of result.fullStream) {
+      if (part.type === "text-delta") events.onTextDelta(part.text);
+      else if (part.type === "error") streamError = part.error;
+    }
+  } catch (err) {
+    throw streamError ?? err;
   }
+  if (streamError) throw streamError;
 
   budget.record(await result.totalUsage);
   const text = await result.text;

@@ -41,7 +41,8 @@ export const TASKS: EvalTask[] = [
   { id: "c7", category: "compute", goal: "Compute 17! (17 factorial) exactly.", check: (a) => has(a, /355[,.\s]?687[,.\s]?428[,.\s]?096[,.\s]?000/) },
 
   // ── data (KALINA ANN) ─────────────────────────────────────────────
-  { id: "d1", category: "data", goal: `Given this CSV, which region has the highest total revenue and what is that total?\n\n${SALES_CSV}`, check: (a) => has(a, "west") && has(a, /30[,.\s]?500/) },
+  // North = 24000 + 10000 = 34000, ahead of West's 28000 + 2500 = 30500.
+  { id: "d1", category: "data", goal: `Given this CSV, which region has the highest total revenue and what is that total?\n\n${SALES_CSV}`, check: (a) => has(a, "north") && has(a, /34[,.\s]?000/) },
   { id: "d2", category: "data", goal: `Given this CSV, what is the total number of units sold across all rows?\n\n${SALES_CSV}`, check: (a) => has(a, "890") },
   { id: "d3", category: "data", goal: `Given this CSV, what is the mean revenue per row? Round to the nearest whole number.\n\n${SALES_CSV}`, check: (a) => has(a, /13[,.\s]?063/) },
   { id: "d4", category: "data", goal: `Given this CSV, how many units of 'Gun' were sold in total across all regions?\n\n${SALES_CSV}`, check: (a) => has(a, "490") },

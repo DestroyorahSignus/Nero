@@ -531,7 +531,7 @@ Twenty tasks, each with a **programmatic ground-truth check** on the final answe
 | Category | n | Exercises | Example |
 |---|---|---|---|
 | compute | 7 | NICO sandbox | "Sum of the digits of 2^100" → must contain `115` |
-| data | 5 | KALINA ANN | "Which region has highest revenue?" → `West` + `30,500` |
+| data | 5 | KALINA ANN | "Which region has highest revenue?" → `North` + `34,000` |
 | reasoning | 4 | tool *restraint* | bat-and-ball → `5` cents (classic intuition trap) |
 | web | 4 | BLUE ROSE | "Fetch example.com, report the heading" → `Example Domain` |
 
@@ -640,7 +640,7 @@ nero/
 │   ├── budget.ts               # TokenBudget (hard cap) + MAX_REFLECTIONS
 │   ├── agents/
 │   │   ├── schemas.ts          # PlanSchema + VerdictSchema (Zod)
-│   │   ├── vergil.ts           # planner  — generateObject
+│   │   ├── vergil.ts           # planner  — streamObject
 │   │   ├── nero.ts             # executor — ToolLoopAgent + event callbacks
 │   │   ├── lady.ts             # critic   — rubric LLM-as-judge
 │   │   └── orchestrator.ts     # the Reflexion state machine + sink interface

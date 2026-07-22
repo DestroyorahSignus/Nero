@@ -555,7 +555,7 @@ answer — the lift from self-correction is measured against reality.
  category   n   exercises          example
  ─────────  ─   ─────────────────  ─────────────────────────────────────
  compute    7   NICO sandbox       digit sum of 2^100 → must contain 115
- data       5   KALINA ANN         top region by revenue → West + 30,500
+ data       5   KALINA ANN         top region by revenue → North + 34,000
  reasoning  4   tool RESTRAINT     bat-and-ball → 5 cents (intuition trap)
  web        4   BLUE ROSE          fetch example.com → "Example Domain"
 ```
@@ -693,7 +693,7 @@ nero/
 │   ├── budget.ts              TokenBudget hard cap + MAX_REFLECTIONS
 │   ├── agents/
 │   │   ├── schemas.ts         PlanSchema + VerdictSchema (Zod)
-│   │   ├── vergil.ts          planner  — generateObject
+│   │   ├── vergil.ts          planner  — streamObject
 │   │   ├── nero.ts            executor — ToolLoopAgent + callbacks
 │   │   ├── lady.ts            critic   — rubric LLM-as-judge
 │   │   └── orchestrator.ts    the Reflexion state machine + sink

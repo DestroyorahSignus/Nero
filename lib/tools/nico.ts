@@ -59,11 +59,28 @@ export const runJs = tool({
       return {
         ok: false as const,
         logs: logs.join("\n").slice(0, MAX_OUTPUT),
-        error: err instanceof Error ? `${err.name}: ${err.message}` : "Execution failed",
+        error: describeError(err),
       };
     }
   },
 });
+
+/**
+ * Errors thrown inside the sandbox are built from the vm context's own realm,
+ * so `err instanceof Error` is FALSE here — using it collapses every failure
+ * ("ReferenceError: require is not defined") into a useless generic string,
+ * and the executor is explicitly instructed to adapt based on this text.
+ * Duck-type instead so the agent sees what actually went wrong.
+ */
+function describeError(err: unknown): string {
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object" && "message" in err) {
+    const e = err as { name?: unknown; message?: unknown };
+    const name = typeof e.name === "string" ? e.name : "Error";
+    return `${name}: ${String(e.message)}`;
+  }
+  return "Execution failed";
+}
 
 function fmt(v: unknown): string {
   if (typeof v === "string") return v;

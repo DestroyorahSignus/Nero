@@ -51,9 +51,22 @@ export async function plan(
   });
 
   // The plan checklist fills in live as schema-conformant fragments stream.
-  for await (const partial of result.partialObjectStream) {
-    onPartial?.(partial);
+  //
+  // Consume fullStream, not partialObjectStream: on a provider failure (missing
+  // or rejected key, rate limit, outage) the partial stream simply ends and
+  // `await result.object` NEVER SETTLES — the run would hang forever with the
+  // console frozen on "VERGIL is planning". The error arrives as a stream part,
+  // so surface it and let the orchestrator report the truth.
+  let streamError: unknown = null;
+  try {
+    for await (const part of result.fullStream) {
+      if (part.type === "object") onPartial?.(part.object);
+      else if (part.type === "error") streamError = part.error;
+    }
+  } catch (err) {
+    throw streamError ?? err;
   }
+  if (streamError) throw streamError;
 
   const object = await result.object; // fully validated against PlanSchema
   budget.record(await result.usage);
