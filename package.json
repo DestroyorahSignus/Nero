@@ -8,7 +8,11 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "evals": "tsx lib/evals/run.ts"
+    "evals": "tsx lib/evals/run.ts",
+    "test": "npm run test:units && npm run test:e2e",
+    "test:units": "tsx tests/units.ts",
+    "test:e2e": "tsx tests/e2e-mock.ts",
+    "test:live": "tsx tests/live.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.15",
