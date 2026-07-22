@@ -18,9 +18,9 @@ export type ProviderId = "anthropic" | "openai" | "google" | "groq";
  */
 const DEFAULTS: Record<ProviderId, Record<AgentRole, string>> = {
   anthropic: {
-    planner: "claude-sonnet-4-6",
-    executor: "claude-sonnet-4-6",
-    critic: "claude-sonnet-4-6",
+    planner: "claude-sonnet-5",
+    executor: "claude-sonnet-5",
+    critic: "claude-opus-4-8",
   },
   openai: {
     planner: "gpt-4.1",

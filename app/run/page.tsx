@@ -232,17 +232,6 @@ export default function RunConsole() {
           <p className="font-mono mt-3 border-l-2 border-ember pl-3 text-[10px] leading-relaxed text-ember">
             No API key on this deployment — missions will fail. Hit{" "}
             <button
-              onClick={toggleSafeMode}
-              title="Safe mode gates run_js behind operator approval"
-              className={`font-mono cut-sm border px-2 py-1 text-[9px] tracking-widest transition ${
-                safeMode
-                  ? "border-ember/60 bg-ember/10 text-ember"
-                  : "border-edge text-mist hover:text-bone"
-              }`}
-            >
-              SAFE MODE {safeMode ? "ON" : "OFF"}
-            </button>
-            <button
               onClick={() => setVaultOpen(true)}
               className="underline underline-offset-2 hover:text-bone"
             >

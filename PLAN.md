@@ -22,14 +22,14 @@ a bounded Reflexion loop, an external-signal critic, a live trace UI, and a
                  └───────────────────────┬──────────────────────────┘
                                          │ tools
  goal ──► VERGIL (planner) ──► NERO (executor, ToolLoopAgent) ──► LADY (critic, LLM-as-judge)
-              ▲   generateObject            streams every            generateObject rubric:
+              ▲   streamObject             streams every            generateObject rubric:
               │   PlanSchema (Zod)          tool call live           task_completion / tool_usage / grounding
               │                                                        │
               └────────── TRISH (memory: reflections, Upstash) ◄─ fail┘
                                      retry ≤ NERO_MAX_REFLECTIONS, capped by TokenBudget
 ```
 
-- **VERGIL** `lib/agents/vergil.ts` — `generateObject` + `PlanSchema`. Plans, never executes.
+- **VERGIL** `lib/agents/vergil.ts` — `streamObject` + `PlanSchema`. Plans, never executes.
 - **NERO** `lib/agents/nero.ts` — `ToolLoopAgent` (`stopWhen: stepCountIs(12)`), per-tool-call callbacks.
 - **LADY** `lib/agents/lady.ts` — rubric judge. Why external: intrinsic self-correction can *degrade*
   results (Huang et al., ICLR 2024, arXiv:2310.01798); Reflexion works when reflections come from a

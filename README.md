@@ -20,7 +20,7 @@ Reflexion self-correction, hard cost guardrails, and a live agent-graph console.
 Tool-calling is table stakes. The hard parts of agentic systems are **bounded loops,
 recovery from bad tool output, and measurement** — so NERO makes them the product:
 
-- **Schema-validated everything** — the plan (`generateObject` + Zod), every tool input
+- **Schema-validated everything** — the plan (`streamObject` + Zod), every tool input
   (`inputSchema`), and the critic's verdict are structured objects, never free prose.
 - **Self-correction with an external signal** — a rubric-driven LLM-as-judge (LADY) produces
   verbal reflections that are stored (TRISH) and injected into the retry. This is deliberate:
@@ -48,7 +48,7 @@ recovery from bad tool output, and measurement** — so NERO makes them the prod
 
 | Agent | Role | Mechanism |
 |---|---|---|
-| **VERGIL** | Planner | `generateObject` → Zod `PlanSchema`: steps with tool hints + checkable success criteria |
+| **VERGIL** | Planner | `streamObject` → Zod `PlanSchema`: steps with tool hints + checkable success criteria |
 | **NERO** | Executor | `ToolLoopAgent`, `stopWhen: stepCountIs(12)`, streams every tool call |
 | **LADY** | Critic | LLM-as-judge rubric: task_completion / tool_usage / grounding; fails unverified answers |
 | **TRISH** | Memory | Upstash Redis: reflections (working, 1h TTL) + run records (long-term) |
