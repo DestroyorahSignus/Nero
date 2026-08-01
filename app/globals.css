@@ -111,6 +111,27 @@ body {
   94.5% { transform: skewX(1deg); }
 }
 
+/* ── Hero title: constant spectral sheen + glow (composited) ─────── */
+.nero-live {
+  background: linear-gradient(
+    100deg,
+    var(--color-bone) 0%,
+    color-mix(in srgb, var(--color-spectral) 92%, white) 24%,
+    var(--color-bone) 44%,
+    var(--color-spectral) 68%,
+    var(--color-bone) 100%
+  );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 24px color-mix(in srgb, var(--color-spectral) 26%, transparent));
+  animation: nero-sheen 7s linear infinite;
+}
+@keyframes nero-sheen {
+  to { background-position: 260% 0; }
+}
+
 /* ── Pipeline pulse dot (landing "how a run works") ──────────────── */
 .pulse-track {
   position: relative;
@@ -344,7 +365,7 @@ body {
   transition: width 0.25s cubic-bezier(0.3, 1.2, 0.4, 1);
 }
 
-/* ── Living background: cursor-reactive ambience behind everything ─ */
+/* ── Living background: cursor-reactive ambience (repaint-free) ──── */
 .living-bg {
   position: fixed;
   inset: 0;
@@ -352,67 +373,55 @@ body {
   overflow: hidden;
   pointer-events: none;
   background: var(--color-void);
-  --mx: 50%;
-  --my: 22%;
+  contain: strict; /* isolate — nothing here can invalidate page layout/paint */
 }
 
-/* Drifting aurora blooms (Devil-Trigger palette) */
+/* Drifting aurora blooms — painted once, animated by transform only (GPU).
+   No filter:blur (that was a major cost); the gradients are already soft. */
 .living-bg-aurora {
   position: absolute;
-  inset: -25%;
+  inset: -20%;
   background:
-    radial-gradient(38% 38% at 18% 26%, color-mix(in srgb, var(--color-spectral) 16%, transparent), transparent 68%),
-    radial-gradient(34% 34% at 82% 18%, color-mix(in srgb, var(--color-arcane) 14%, transparent), transparent 66%),
-    radial-gradient(42% 42% at 72% 84%, color-mix(in srgb, var(--color-crimson) 10%, transparent), transparent 68%),
-    radial-gradient(30% 30% at 30% 82%, color-mix(in srgb, var(--color-ember) 8%, transparent), transparent 64%);
-  filter: blur(46px);
-  animation: aurora-drift 26s ease-in-out infinite alternate;
+    radial-gradient(40% 40% at 18% 26%, color-mix(in srgb, var(--color-spectral) 14%, transparent), transparent 70%),
+    radial-gradient(36% 36% at 82% 18%, color-mix(in srgb, var(--color-arcane) 12%, transparent), transparent 70%),
+    radial-gradient(44% 44% at 74% 84%, color-mix(in srgb, var(--color-crimson) 9%, transparent), transparent 70%);
+  animation: aurora-drift 32s ease-in-out infinite alternate;
   will-change: transform;
+  transform: translateZ(0);
 }
 @keyframes aurora-drift {
-  0% { transform: translate3d(-3%, -2%, 0) scale(1) rotate(0deg); }
-  50% { transform: translate3d(2%, 3%, 0) scale(1.08) rotate(2deg); }
-  100% { transform: translate3d(4%, -1%, 0) scale(1.04) rotate(-1.5deg); }
+  from { transform: translate3d(-2%, -1%, 0) scale(1.02); }
+  to { transform: translate3d(3%, 2%, 0) scale(1.06); }
 }
 
-/* Faint grid that lights up around the cursor */
+/* Static faint grid, softly masked to the center — painted once, never moves */
 .living-bg-grid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(color-mix(in srgb, var(--color-edge) 60%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--color-edge) 60%, transparent) 1px, transparent 1px);
-  background-size: 46px 46px;
-  mask-image: radial-gradient(420px circle at var(--mx) var(--my), #000 0%, transparent 72%);
-  -webkit-mask-image: radial-gradient(420px circle at var(--mx) var(--my), #000 0%, transparent 72%);
-  opacity: 0.85;
-}
-
-/* Spotlight that follows the pointer */
-.living-bg-cursor {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    460px circle at var(--mx) var(--my),
-    color-mix(in srgb, var(--color-spectral) 12%, transparent),
-    transparent 60%
-  );
-}
-
-/* Slow-drifting scanlines for CRT texture */
-.living-bg-scan {
-  position: absolute;
-  inset: 0;
-  background-image: repeating-linear-gradient(
-    0deg,
-    transparent 0 2px,
-    rgba(255, 255, 255, 0.012) 2px 3px
-  );
-  animation: bg-scan 14s linear infinite;
+    linear-gradient(color-mix(in srgb, var(--color-edge) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-edge) 45%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 100% 80% at 50% 30%, #000 20%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 100% 80% at 50% 30%, #000 20%, transparent 78%);
   opacity: 0.5;
 }
-@keyframes bg-scan {
-  to { background-position: 0 300px; }
+
+/* Pointer spotlight — a fixed-size layer moved with transform ONLY.
+   No per-frame repaint: the gradient is baked once, JS just translates it. */
+.living-bg-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 760px;
+  height: 760px;
+  background: radial-gradient(
+    circle closest-side,
+    color-mix(in srgb, var(--color-spectral) 13%, transparent),
+    transparent 100%
+  );
+  will-change: transform;
+  transform: translate3d(50vw, 25vh, 0) translate(-50%, -50%);
 }
 
 /* ── Interaction layer: hover / press / focus / reveal ───────────── */
@@ -533,6 +542,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .living-bg-aurora,
   .living-bg-scan {
+    animation: none;
+  }
+  .nero-live {
     animation: none;
   }
   .rise-in,

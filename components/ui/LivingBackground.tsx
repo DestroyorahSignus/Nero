@@ -3,28 +3,43 @@
 import { useEffect, useRef } from "react";
 
 /**
- * The living background — a fixed, cursor-reactive ambience layer behind the
- * whole app. Slow drifting aurora blooms in the Devil-Trigger palette, plus a
- * faint grid and a glow that track the pointer. Purely decorative: fixed,
- * pointer-events:none, and sat behind content at a negative z-index.
+ * Cursor-reactive ambience behind the whole app — built to stay cheap.
  *
- * The pointer position is written to CSS custom properties (--mx/--my) on rAF,
- * so the cursor-following gradients are GPU-composited and never re-render React.
+ * The pointer glow is a fixed-size element moved with `transform: translate3d`
+ * only: transforms are GPU-composited, so following the cursor costs no layout
+ * and no repaint (the earlier version animated a radial-gradient's *position*
+ * and a mask, which repainted full-viewport layers every frame — that was the
+ * lag). Everything else (aurora, grid, scanlines) is painted once and either
+ * static or animated purely by transform.
  */
 export function LivingBackground() {
-  const ref = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const glow = glowRef.current;
+    if (!glow) return;
+    // Skip the follow effect on touch devices — there's no pointer to track.
+    if (window.matchMedia("(pointer: coarse)").matches) return;
+
+    let x = window.innerWidth / 2;
+    let y = window.innerHeight * 0.25;
     let raf = 0;
-    const onMove = (e: PointerEvent) => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        el.style.setProperty("--mx", ((e.clientX / window.innerWidth) * 100).toFixed(2) + "%");
-        el.style.setProperty("--my", ((e.clientY / window.innerHeight) * 100).toFixed(2) + "%");
-      });
+    let queued = false;
+
+    const paint = () => {
+      queued = false;
+      glow.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
     };
+    const onMove = (e: PointerEvent) => {
+      x = e.clientX;
+      y = e.clientY;
+      if (!queued) {
+        queued = true;
+        raf = requestAnimationFrame(paint);
+      }
+    };
+
+    paint();
     window.addEventListener("pointermove", onMove, { passive: true });
     return () => {
       window.removeEventListener("pointermove", onMove);
@@ -33,11 +48,10 @@ export function LivingBackground() {
   }, []);
 
   return (
-    <div ref={ref} className="living-bg" aria-hidden="true">
+    <div className="living-bg" aria-hidden="true">
       <div className="living-bg-aurora" />
       <div className="living-bg-grid" />
-      <div className="living-bg-cursor" />
-      <div className="living-bg-scan" />
+      <div ref={glowRef} className="living-bg-glow" />
     </div>
   );
 }

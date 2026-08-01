@@ -104,7 +104,7 @@ export default function Landing() {
           MODEL CONTEXT PROTOCOL · MULTI-AGENT · REFLEXION
         </p>
         <h1
-          className="glitch font-display mt-5 w-fit text-7xl font-bold italic tracking-tight text-bone sm:text-9xl"
+          className="glitch nero-live font-display mt-5 w-fit text-7xl font-bold italic tracking-tight sm:text-9xl"
           data-text="NERO"
         >
           NERO
