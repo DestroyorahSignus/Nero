@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ReactFlow,
   Background,
   BackgroundVariant,
+  Controls,
+  MiniMap,
+  Panel,
   Handle,
   Position,
+  useNodesState,
+  useEdgesState,
   type Node,
   type Edge,
   type NodeProps,
@@ -22,8 +27,17 @@ type AgentNodeData = {
   status: StepStatus;
   accent: string; // tailwind text color class
   idle?: boolean; // pre-deploy: breathe faintly so the console feels alive
+  role?: string;
 };
 type AgentFlowNode = Node<AgentNodeData, "agent">;
+
+const ACCENT_HEX: Record<string, string> = {
+  "text-ember": "#f2b94b",
+  "text-spectral": "#5ee1ff",
+  "text-crimson": "#e1364c",
+  "text-arcane": "#9d7bff",
+  "text-bone": "#edf1f7",
+};
 
 function AgentNode({ data }: NodeProps<AgentFlowNode>) {
   const stateClass =
@@ -46,7 +60,7 @@ function AgentNode({ data }: NodeProps<AgentFlowNode>) {
           : "bg-edge";
   return (
     <div
-      className={`node-hover cut-sm min-w-36 border border-edge bg-panel px-4 py-3 ${stateClass}`}
+      className={`node-hover cut-sm min-w-36 cursor-pointer border border-edge bg-panel px-4 py-3 ${stateClass}`}
     >
       <Handle type="target" position={Position.Left} className="!bg-edge" />
       <div className="flex items-center gap-2">
@@ -65,7 +79,33 @@ function AgentNode({ data }: NodeProps<AgentFlowNode>) {
 
 const nodeTypes = { agent: AgentNode };
 
-/* ── Graph builder ───────────────────────────────────────────────── */
+/* ── Options toolbar ─────────────────────────────────────────────── */
+
+function GraphToggle({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={on}
+      className={`press font-mono cut-sm border px-2 py-1 text-[9px] tracking-widest transition ${
+        on
+          ? "border-spectral bg-spectral/15 text-spectral"
+          : "border-edge bg-panel/80 text-mist hover:text-bone"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ── Graph ───────────────────────────────────────────────────────── */
 
 export function AgentGraph({
   agentSteps,
@@ -74,7 +114,14 @@ export function AgentGraph({
   agentSteps: AgentStepData[];
   toolCalls: ToolCallData[];
 }) {
-  const { nodes, edges } = useMemo(() => {
+  const [draggable, setDraggable] = useState(false);
+  const [showTools, setShowTools] = useState(true);
+  const [showMap, setShowMap] = useState(false);
+  const [scrollZoom, setScrollZoom] = useState(false);
+  const [selected, setSelected] = useState<AgentNodeData | null>(null);
+  const [inst, setInst] = useState<ReactFlowInstance<AgentFlowNode, Edge> | null>(null);
+
+  const computed = useMemo(() => {
     const latest = (agent: string): AgentStepData | undefined =>
       [...agentSteps].reverse().find((s) => s.agent === agent);
 
@@ -82,11 +129,7 @@ export function AgentGraph({
     const nero = latest("NERO");
     const lady = latest("LADY");
     const anyFail = lady?.status === "failed";
-
     const status = (s?: AgentStepData): StepStatus => s?.status ?? "pending";
-
-    // Pre-deploy the crew idles: no steps yet → breathe faintly so the
-    // console reads as armed-and-waiting rather than dead.
     const idle = agentSteps.length === 0;
 
     const nodes: AgentFlowNode[] = [
@@ -100,6 +143,7 @@ export function AgentGraph({
           status: status(vergil),
           accent: "text-ember",
           idle,
+          role: "Planner",
         },
       },
       {
@@ -112,6 +156,7 @@ export function AgentGraph({
           status: status(nero),
           accent: "text-spectral",
           idle,
+          role: "Executor",
         },
       },
       {
@@ -124,6 +169,7 @@ export function AgentGraph({
           status: status(lady),
           accent: "text-crimson",
           idle,
+          role: "Critic",
         },
       },
       {
@@ -136,12 +182,12 @@ export function AgentGraph({
           status: anyFail ? "done" : "pending",
           accent: "text-arcane",
           idle,
+          role: "Memory",
         },
       },
     ];
 
-    // Tool nodes fan out above NERO — last 4 calls kept visible
-    const recentTools = toolCalls.slice(-4);
+    const recentTools = showTools ? toolCalls.slice(-4) : [];
     recentTools.forEach((t, i) => {
       nodes.push({
         id: `tool-${t.callId}`,
@@ -152,36 +198,16 @@ export function AgentGraph({
           subtitle: t.latencyMs ? `${t.latencyMs}ms` : "running…",
           status: t.status === "failed" ? "failed" : t.status === "done" ? "done" : "running",
           accent: "text-bone",
+          role: "Tool",
         },
       });
     });
 
     const edges: Edge[] = [
-      {
-        id: "v-n",
-        source: "vergil",
-        target: "nero",
-        className: status(nero) === "running" ? "edge-active" : "",
-      },
-      {
-        id: "n-l",
-        source: "nero",
-        target: "lady",
-        className: status(lady) === "running" ? "edge-active" : "",
-      },
-      {
-        id: "l-t",
-        source: "lady",
-        target: "trish",
-        className: anyFail ? "edge-active" : "",
-        style: { opacity: anyFail ? 1 : 0.25 },
-      },
-      {
-        id: "t-v",
-        source: "trish",
-        target: "vergil",
-        style: { opacity: anyFail ? 1 : 0.25 },
-      },
+      { id: "v-n", source: "vergil", target: "nero", className: status(nero) === "running" ? "edge-active" : "" },
+      { id: "n-l", source: "nero", target: "lady", className: status(lady) === "running" ? "edge-active" : "" },
+      { id: "l-t", source: "lady", target: "trish", className: anyFail ? "edge-active" : "", style: { opacity: anyFail ? 1 : 0.25 } },
+      { id: "t-v", source: "trish", target: "vergil", style: { opacity: anyFail ? 1 : 0.25 } },
       ...recentTools.map((t) => ({
         id: `e-tool-${t.callId}`,
         source: "nero",
@@ -191,16 +217,38 @@ export function AgentGraph({
     ];
 
     return { nodes, edges };
-  }, [agentSteps, toolCalls]);
+  }, [agentSteps, toolCalls, showTools]);
 
-  // React Flow only auto-fits on mount; NERO's nodes stream in afterwards.
-  // Refit whenever the node set changes so the graph is never blank/off-screen.
-  const [inst, setInst] = useState<ReactFlowInstance<AgentFlowNode, Edge> | null>(null);
+  const [nodes, setNodes, onNodesChange] = useNodesState<AgentFlowNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  // Sync the computed layout into state. When the user has unlocked DRAG, keep
+  // whatever positions they set for nodes that still exist; otherwise use the
+  // tidy machine layout (locking re-tidies).
   useEffect(() => {
-    if (!inst) return;
+    setNodes((prev) => {
+      const pos = new Map(prev.map((n) => [n.id, n.position]));
+      return computed.nodes.map((n) =>
+        draggable && pos.has(n.id) ? { ...n, position: pos.get(n.id)! } : n,
+      );
+    });
+  }, [computed.nodes, draggable, setNodes]);
+  useEffect(() => {
+    setEdges(computed.edges);
+  }, [computed.edges, setEdges]);
+
+  // Auto-fit only while the layout is machine-managed (locked). Once the user
+  // is dragging, leave their framing alone.
+  useEffect(() => {
+    if (!inst || draggable) return;
     const t = setTimeout(() => inst.fitView({ padding: 0.25, duration: 250 }), 50);
     return () => clearTimeout(t);
-  }, [inst, nodes.length]);
+  }, [inst, computed.nodes.length, draggable]);
+
+  const onNodeClick = useCallback(
+    (_: React.MouseEvent, node: AgentFlowNode) => setSelected(node.data),
+    [],
+  );
 
   return (
     <div className="h-72 min-h-72 w-full sm:h-80">
@@ -208,24 +256,109 @@ export function AgentGraph({
         onInit={setInst}
         nodes={nodes}
         edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={onNodeClick}
+        onPaneClick={() => setSelected(null)}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.25 }}
         proOptions={{ hideAttribution: false }}
-        nodesDraggable={false}
+        nodesDraggable={draggable}
         nodesConnectable={false}
-        elementsSelectable={false}
+        elementsSelectable
         panOnDrag
-        zoomOnScroll={false}
-        preventScrolling={false}
+        zoomOnScroll={scrollZoom}
+        zoomOnPinch
+        minZoom={0.4}
+        maxZoom={2}
+        preventScrolling={scrollZoom}
         colorMode="dark"
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={22}
-          size={1}
-          color="#1d2738"
+        <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="#1d2738" />
+
+        <Controls
+          showInteractive={false}
+          className="agent-graph-controls"
+          fitViewOptions={{ padding: 0.25 }}
         />
+
+        {showMap && (
+          <MiniMap
+            pannable
+            zoomable
+            className="agent-graph-map"
+            maskColor="rgba(10,13,20,0.72)"
+            nodeStrokeWidth={2}
+            nodeColor={(n) => ACCENT_HEX[(n.data as AgentNodeData)?.accent] ?? "#1d2738"}
+          />
+        )}
+
+        <Panel position="top-right" className="!m-2">
+          <div className="flex flex-wrap justify-end gap-1">
+            <GraphToggle on={draggable} onClick={() => setDraggable((v) => !v)}>
+              DRAG
+            </GraphToggle>
+            <GraphToggle on={showTools} onClick={() => setShowTools((v) => !v)}>
+              TOOLS
+            </GraphToggle>
+            <GraphToggle on={showMap} onClick={() => setShowMap((v) => !v)}>
+              MAP
+            </GraphToggle>
+            <GraphToggle on={scrollZoom} onClick={() => setScrollZoom((v) => !v)}>
+              ZOOM
+            </GraphToggle>
+            <button
+              onClick={() => inst?.fitView({ padding: 0.25, duration: 250 })}
+              className="press font-mono cut-sm border border-edge bg-panel/80 px-2 py-1 text-[9px] tracking-widest text-mist transition hover:text-bone"
+            >
+              FIT
+            </button>
+          </div>
+        </Panel>
+
+        {selected && (
+          <Panel position="top-left" className="!m-2">
+            <div className="palette-pop cut-sm w-52 border border-edge bg-panel/95 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className={`font-display text-sm font-bold italic ${selected.accent}`}>
+                  {selected.title}
+                </p>
+                <button
+                  onClick={() => setSelected(null)}
+                  aria-label="Close"
+                  className="font-mono text-[9px] tracking-widest text-mist transition hover:text-bone"
+                >
+                  ESC
+                </button>
+              </div>
+              {selected.role && (
+                <p className="font-mono mt-0.5 text-[9px] tracking-widest text-mist">
+                  {selected.role.toUpperCase()}
+                </p>
+              )}
+              <dl className="mt-2 space-y-1">
+                <div className="flex justify-between gap-3">
+                  <dt className="font-mono text-[9px] tracking-widest text-mist">STATUS</dt>
+                  <dd
+                    className={`font-mono text-[9px] tracking-widest ${
+                      selected.status === "failed"
+                        ? "text-crimson"
+                        : selected.status === "running" || selected.status === "done"
+                          ? "text-spectral"
+                          : "text-mist"
+                    }`}
+                  >
+                    {selected.status.toUpperCase()}
+                  </dd>
+                </div>
+                <p className="font-mono text-[10px] leading-relaxed text-bone/80">
+                  {selected.subtitle}
+                </p>
+              </dl>
+            </div>
+          </Panel>
+        )}
       </ReactFlow>
     </div>
   );

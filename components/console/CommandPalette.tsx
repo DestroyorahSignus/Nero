@@ -78,7 +78,7 @@ export function CommandPalette({
 
   return (
     <div
-      className="deck-backdrop fixed inset-0 z-[60] flex items-start justify-center bg-void/70 p-4 pt-[12vh] backdrop-blur-sm"
+      className="deck-backdrop fixed inset-0 z-[60] flex items-start justify-center bg-void/85 p-4 pt-[12vh]"
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"

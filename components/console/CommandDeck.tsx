@@ -162,7 +162,7 @@ export function CommandDeck({
 
   return (
     <div
-      className="deck-backdrop fixed inset-0 z-50 flex bg-void/70 backdrop-blur-sm"
+      className="deck-backdrop fixed inset-0 z-50 flex bg-void/85"
       role="dialog"
       aria-modal="true"
       aria-label="Command Deck"
