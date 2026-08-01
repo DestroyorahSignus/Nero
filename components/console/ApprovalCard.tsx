@@ -38,7 +38,7 @@ export function ApprovalCard({
           data.status === "approved" ? "text-spectral" : "text-crimson"
         }`}
       >
-        ⚔ {data.toolName} — {data.status.toUpperCase()}
+        {data.toolName} — {data.status.toUpperCase()}
         {data.reason ? ` · ${data.reason}` : ""}
       </p>
     );

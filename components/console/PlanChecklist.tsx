@@ -28,7 +28,7 @@ export function PlanChecklist({ plan }: { plan: PlanData | null }) {
                 {s.title}
                 {s.toolHint && (
                   <span className="font-mono ml-2 text-[10px] text-spectral">
-                    ⚒ {s.toolHint}
+                    {s.toolHint}
                   </span>
                 )}
               </p>

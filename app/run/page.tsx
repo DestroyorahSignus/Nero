@@ -147,7 +147,6 @@ export default function RunConsole() {
     {
       id: "deck",
       label: "Open Command Deck",
-      hint: "⚙",
       keywords: "settings keys models provider safe mode api",
       run: () => setDeckOpen(true),
     },
@@ -231,7 +230,7 @@ export default function RunConsole() {
               title="Keys · models · safe mode"
               className="press sheen font-display cut-sm border border-spectral/60 bg-spectral/5 px-3 py-1 text-[10px] font-semibold tracking-widest text-spectral hover:bg-spectral/20"
             >
-              ⚙ COMMAND DECK
+              COMMAND DECK
             </button>
             <p className="font-mono hidden text-[10px] tracking-[0.2em] text-mist md:block">
               {running ? "● LIVE" : "READY"}
@@ -487,7 +486,7 @@ function ShareReplay({ sessionId }: { sessionId: string }) {
       }}
       className="font-mono mt-2 text-[9px] tracking-widest text-mist underline-offset-2 hover:text-bone hover:underline"
     >
-      {copied ? "REPLAY LINK COPIED ✓" : "⎘ COPY REPLAY PERMALINK"}
+      {copied ? "REPLAY LINK COPIED" : "COPY REPLAY PERMALINK"}
     </button>
   );
 }

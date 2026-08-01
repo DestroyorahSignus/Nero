@@ -32,7 +32,10 @@ export function BudgetStrip({
   return (
     <div className="mx-auto mt-3 flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-6">
       <span className="font-mono flex items-center gap-1.5 text-[10px] tracking-widest text-mist">
-        <span className={running ? "text-spectral" : "text-mist"}>◈</span>
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${running ? "bg-spectral" : "bg-mist"}`}
+          aria-hidden
+        />
         {provider.toUpperCase()}
       </span>
 

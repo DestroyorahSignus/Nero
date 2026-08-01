@@ -63,7 +63,7 @@ export function TraceTimeline({ entries }: { entries: TraceEntry[] }) {
               aria-expanded={isOpen}
             >
               <span className="text-mist">a{t.attempt}</span>{" "}
-              <span className="text-spectral">⚒ {t.toolName}</span> · {t.status}
+              <span className="text-spectral">{t.toolName}</span> · {t.status}
               {typeof t.latencyMs === "number" ? ` · ${t.latencyMs}ms` : ""}
               <span className="float-right text-mist">{isOpen ? "−" : "+"}</span>
             </button>

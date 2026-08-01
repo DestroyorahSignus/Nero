@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { LivingBackground } from "@/components/ui/LivingBackground";
 
 export const metadata: Metadata = {
   title: "NERO — Neural Executive & Reasoning Orchestrator",
   description:
-    "An MCP-orchestrated planner → executor → critic multi-agent system with live agent-graph visualization, Reflexion self-correction and hard cost guardrails.",
+    "An MCP-orchestrated planner, executor and critic multi-agent system with live agent-graph visualization, Reflexion self-correction and hard cost guardrails.",
 };
 
 export default function RootLayout({
@@ -27,7 +28,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen bg-void text-bone">{children}</body>
+      <body className="min-h-screen text-bone">
+        <LivingBackground />
+        {children}
+      </body>
     </html>
   );
 }

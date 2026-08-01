@@ -344,6 +344,77 @@ body {
   transition: width 0.25s cubic-bezier(0.3, 1.2, 0.4, 1);
 }
 
+/* ── Living background: cursor-reactive ambience behind everything ─ */
+.living-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--color-void);
+  --mx: 50%;
+  --my: 22%;
+}
+
+/* Drifting aurora blooms (Devil-Trigger palette) */
+.living-bg-aurora {
+  position: absolute;
+  inset: -25%;
+  background:
+    radial-gradient(38% 38% at 18% 26%, color-mix(in srgb, var(--color-spectral) 16%, transparent), transparent 68%),
+    radial-gradient(34% 34% at 82% 18%, color-mix(in srgb, var(--color-arcane) 14%, transparent), transparent 66%),
+    radial-gradient(42% 42% at 72% 84%, color-mix(in srgb, var(--color-crimson) 10%, transparent), transparent 68%),
+    radial-gradient(30% 30% at 30% 82%, color-mix(in srgb, var(--color-ember) 8%, transparent), transparent 64%);
+  filter: blur(46px);
+  animation: aurora-drift 26s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes aurora-drift {
+  0% { transform: translate3d(-3%, -2%, 0) scale(1) rotate(0deg); }
+  50% { transform: translate3d(2%, 3%, 0) scale(1.08) rotate(2deg); }
+  100% { transform: translate3d(4%, -1%, 0) scale(1.04) rotate(-1.5deg); }
+}
+
+/* Faint grid that lights up around the cursor */
+.living-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-edge) 60%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-edge) 60%, transparent) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(420px circle at var(--mx) var(--my), #000 0%, transparent 72%);
+  -webkit-mask-image: radial-gradient(420px circle at var(--mx) var(--my), #000 0%, transparent 72%);
+  opacity: 0.85;
+}
+
+/* Spotlight that follows the pointer */
+.living-bg-cursor {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    460px circle at var(--mx) var(--my),
+    color-mix(in srgb, var(--color-spectral) 12%, transparent),
+    transparent 60%
+  );
+}
+
+/* Slow-drifting scanlines for CRT texture */
+.living-bg-scan {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0 2px,
+    rgba(255, 255, 255, 0.012) 2px 3px
+  );
+  animation: bg-scan 14s linear infinite;
+  opacity: 0.5;
+}
+@keyframes bg-scan {
+  to { background-position: 0 300px; }
+}
+
 /* ── Interaction layer: hover / press / focus / reveal ───────────── */
 
 /* Hover-lift for clipped panels & cards. drop-shadow (not box-shadow)
@@ -460,6 +531,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .living-bg-aurora,
+  .living-bg-scan {
+    animation: none;
+  }
   .rise-in,
   .reveal > * {
     animation: none;
