@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { ProviderId } from "./providers";
+import type { AgentRole, ProviderId } from "./providers";
 
 /**
  * Per-request run configuration — the BYOK (bring-your-own-key) mechanism.
@@ -14,6 +14,8 @@ export interface RunConfig {
   provider?: ProviderId;
   apiKey?: string;
   tavilyKey?: string;
+  /** Per-role model overrides from the console's Command Deck (request-scoped). */
+  models?: Partial<Record<AgentRole, string>>;
   /** HITL: gate dangerous tools behind operator approval (default on). */
   approvalMode?: boolean;
 }

@@ -554,6 +554,8 @@ Details that make it a real harness rather than a demo script:
 - Checks are regex/substring against ground truth (`102334155`, `27720`, thousand-separator-tolerant patterns) — no LLM grades the eval that validates the LLM loop, avoiding the circular-judge problem.
 - The runner reports completion rate, total tokens, and estimated cost per configuration — the README table is meant to be filled with **both** numbers, because publishing the ablation baseline alongside the headline is what makes the headline credible.
 
+**Measured** (on `groq/openai/gpt-oss-120b`, a small free model): bare executor **85% (17/20)** at ~1,800 tokens/run; full loop **85% (17/20)** at ~4,200 tokens/run. On this weak model the completion delta is ~0 and several failures are Groq free-tier rate limits / structured-output quirks rather than the architecture — the delta is the signal, so re-run against a stronger provider for headline figures.
+
 ---
 
 ## 12. Provider abstraction

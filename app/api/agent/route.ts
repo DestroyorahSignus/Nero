@@ -4,7 +4,8 @@ import {
 } from "ai";
 import { runNero, type OrchestratorSink } from "@/lib/agents/orchestrator";
 import { trish } from "@/lib/memory/trish";
-import { isProviderId } from "@/lib/providers";
+import { activeProvider, isProviderId, type AgentRole } from "@/lib/providers";
+import { isKnownModel } from "@/lib/model-catalog";
 import type { RunConfig } from "@/lib/run-context";
 import type { NeroUIMessage } from "@/ai/types";
 
@@ -38,11 +39,25 @@ export async function POST(req: Request) {
   // BYOK: optional per-request keys from the console's key vault.
   // Used for this request only — never stored, never logged.
   const providerHeader = req.headers.get("x-nero-provider")?.toLowerCase();
+  const provider =
+    providerHeader && isProviderId(providerHeader) ? providerHeader : undefined;
+
+  // Per-role model picks from the Command Deck. Validate each against the
+  // effective provider's allow-list — an unknown id is dropped so the role
+  // falls back to the server default. An arbitrary client string never
+  // reaches a provider.
+  const effectiveProvider = provider ?? activeProvider();
+  const models: Partial<Record<AgentRole, string>> = {};
+  for (const role of ["planner", "executor", "critic"] as const) {
+    const picked = req.headers.get(`x-nero-${role}-model`);
+    if (picked && isKnownModel(effectiveProvider, picked)) models[role] = picked;
+  }
+
   const config: RunConfig = {
-    provider:
-      providerHeader && isProviderId(providerHeader) ? providerHeader : undefined,
+    provider,
     apiKey: req.headers.get("x-nero-api-key") ?? undefined,
     tavilyKey: req.headers.get("x-nero-tavily-key") ?? undefined,
+    models: Object.keys(models).length ? models : undefined,
     approvalMode: req.headers.get("x-nero-approval") !== "off",
   };
 

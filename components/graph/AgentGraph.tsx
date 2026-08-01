@@ -21,6 +21,7 @@ type AgentNodeData = {
   subtitle: string;
   status: StepStatus;
   accent: string; // tailwind text color class
+  idle?: boolean; // pre-deploy: breathe faintly so the console feels alive
 };
 type AgentFlowNode = Node<AgentNodeData, "agent">;
 
@@ -32,7 +33,9 @@ function AgentNode({ data }: NodeProps<AgentFlowNode>) {
         ? "node-failed"
         : data.status === "done"
           ? "node-done"
-          : "";
+          : data.idle
+            ? "node-idle"
+            : "";
   const dot =
     data.status === "running"
       ? "bg-spectral animate-pulse"
@@ -82,6 +85,10 @@ export function AgentGraph({
 
     const status = (s?: AgentStepData): StepStatus => s?.status ?? "pending";
 
+    // Pre-deploy the crew idles: no steps yet → breathe faintly so the
+    // console reads as armed-and-waiting rather than dead.
+    const idle = agentSteps.length === 0;
+
     const nodes: AgentFlowNode[] = [
       {
         id: "vergil",
@@ -89,9 +96,10 @@ export function AgentGraph({
         position: { x: 0, y: 90 },
         data: {
           title: "VERGIL",
-          subtitle: vergil?.detail ?? "planner",
+          subtitle: vergil?.detail ?? (idle ? "awaiting orders" : "planner"),
           status: status(vergil),
           accent: "text-ember",
+          idle,
         },
       },
       {
@@ -100,9 +108,10 @@ export function AgentGraph({
         position: { x: 230, y: 90 },
         data: {
           title: "NERO",
-          subtitle: nero?.detail ?? "executor",
+          subtitle: nero?.detail ?? (idle ? "standing by" : "executor"),
           status: status(nero),
           accent: "text-spectral",
+          idle,
         },
       },
       {
@@ -111,9 +120,10 @@ export function AgentGraph({
         position: { x: 460, y: 90 },
         data: {
           title: "LADY",
-          subtitle: lady?.detail ?? "critic",
+          subtitle: lady?.detail ?? (idle ? "ready to judge" : "critic"),
           status: status(lady),
           accent: "text-crimson",
+          idle,
         },
       },
       {
@@ -125,6 +135,7 @@ export function AgentGraph({
           subtitle: anyFail ? "reflection stored" : "memory",
           status: anyFail ? "done" : "pending",
           accent: "text-arcane",
+          idle,
         },
       },
     ];

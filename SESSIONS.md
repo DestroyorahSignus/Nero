@@ -224,3 +224,135 @@ Regression guards for bugs 1–3 are called out in `tests/README.md`.
 - Everything in GUIDE.md §16.8 item 5 (resumable streams, OTel export, MCP
   elicitation, native `toolApproval`) stays deferred **by design** — read the
   §14 trade-off table before "fixing" any of it.
+
+---
+
+## 2026-08-01 — Command Deck UI, live model picker, real Groq evals
+
+Session goal: run the evals for real (a free Groq key finally on hand), fill the
+long-empty README numbers, and turn the console into "the best it can be" — one
+consolidated settings surface, a real model picker, and more motion.
+
+**Hard constraint honored:** $0. Every runtime call — the eval suite and all
+manual verification — went through the free-tier Groq + Tavily keys only,
+`LLM_PROVIDER=groq` throughout. Keys were passed as inline env vars, never
+written to any file. (Keys were pasted into chat, so they should be rotated.)
+
+### Command Deck — one settings surface (retired the KeyVault modal)
+
+`components/console/KeyVault.tsx` → `components/console/CommandDeck.tsx`: a
+left slide-in drawer consolidating provider + BYOK keys, the SAFE MODE toggle
+(moved out of the header), a per-role model picker, and a live DEPLOYMENT
+status block. The storage helpers and the exported `readVault()` are unchanged —
+the security-sensitive key path (sessionStorage → per-request headers, nothing
+persisted/logged) was deliberately left minimal, only extended with a `models`
+field. The header now carries a single `⚙ COMMAND DECK` button plus a `⌘K`
+launcher instead of separate KEYS / SAFE MODE buttons.
+
+### Real per-role model picker (new capability, not just display)
+
+The console could never pick models before — model selection was server-only,
+and `/api/status.models` was fetched but never shown. Now each role
+(planner/executor/critic) can be chosen in the deck and the pick is honored
+request-scoped through the existing BYOK path:
+
+- `lib/model-catalog.ts` (new) — allow-listed model ids per provider, the single
+  source of truth shared by the deck's dropdowns and the route's validation.
+- `RunConfig.models` added to `lib/run-context.ts`; `resolveModel`/`modelLabel`
+  in `lib/providers.ts` now read `runConfig().models?.[role]` first (precedence:
+  Command Deck pick > `NERO_<ROLE>_MODEL` env > provider default).
+- `app/api/agent/route.ts` parses `x-nero-<role>-model` headers and **validates
+  each against the effective provider's allow-list** — an unknown id is dropped
+  and the role falls back to the default, so an arbitrary client string never
+  reaches a provider.
+- The picks ride in the transport `headers()` closure alongside the existing
+  BYOK key headers and persist in the vault like keys do.
+
+### More motion + power-user surfaces
+
+- `⌘K` command palette (`components/console/CommandPalette.tsx`) — launch preset
+  missions, open the deck, toggle SAFE MODE, copy the replay permalink, focus
+  the input. Substring filter, ↑/↓/Enter/Esc.
+- Live budget/status strip (`components/console/BudgetStrip.tsx`) under the
+  header — effective provider, animated token-budget burn, MEMORY/SEARCH/SAFE.
+- Idle crew: pre-deploy the agent-graph nodes breathe faintly ("awaiting orders"
+  / "standing by" / "ready to judge") so the console reads as armed, not dead.
+- All new keyframes (`deck-in`, `deck-item-in`, `palette-in`, `node-idle`,
+  `budget-fill-hot`) live in `globals.css` and are added to the
+  `prefers-reduced-motion` disable block, matching the existing "slam" idiom.
+
+### Bug found by the eval run — LADY's structured output on Groq
+
+`gpt-oss-120b` does not emit a bare verdict object: it either **echoes the whole
+JSON-Schema envelope** (nesting the answer under `properties`) or **concatenates
+the schema in front of the object** (`{"$schema":…}{"criteria":…}`). Both are
+invalid against `VerdictSchema` and blow up `generateObject` with
+`json_validate_failed`.
+
+Impact traced through `orchestrator.ts:298`: because the attempt loop is
+try/caught and `answer` is set before LADY runs, a critic crash still returns the
+executor's answer — so it does **not** lower the answer-checked eval score, but
+it *does* kill the verdict, the StyleRank, and the Reflexion retry on Groq.
+
+Fix (`lib/agents/lady.ts`): an `experimental_repairText` hook (verified present
+in the installed `ai` `.d.ts`, per §16.3) that recovers the real object with a
+string/escape-aware balanced-brace scan, returning the last top-level object that
+parses and isn't a bare `$schema` wrapper. Inert for well-behaved providers —
+it only fires on a parse failure. Guarded by 4 new unit tests that validate the
+recovered text through `VerdictSchema`.
+
+### Evals — the honest result (model: `groq/openai/gpt-oss-120b`, free tier)
+
+| Config | Completion | Total tokens | Mean/run |
+|---|---|---|---|
+| Bare executor | 17/20 (85%) | 36,122 | ~1,800 |
+| Full NERO loop | 17/20 (85%) | 84,119 | ~4,200 |
+
+**The bare-vs-full completion delta is 0 pp on this model** — the full loop cost
+~2.3× the tokens for the same 17/20 (stable across two full runs). This is an
+honest, expected outcome, not a defect, and worth understanding:
+
+- The eval scores the **answer text**, and the executor produces that answer in
+  *both* modes. The full loop can only beat bare when **Reflexion turns a wrong
+  answer right**. Of the 3 failures, none were reflexion-recoverable on this
+  model, so no lift showed.
+- The loop's value (a reliable external critic, self-correction, guardrails)
+  needs a model strong enough to (a) judge correctly and (b) act on the
+  reflection. `gpt-oss-120b` is not that model — see the two issues below. The
+  delta is expected to widen on a capable provider; the numbers are filled in
+  README with a footnote saying exactly this.
+
+### Two Groq-model issues documented, not fixed (model quality, not architecture)
+
+- **Tool-call arg parse failures** — `Failed to parse tool call arguments as
+  JSON` (`invalid_request_error`) cost **w2** (full) and **d4** (bare). This is
+  Groq rejecting the model's malformed tool-call JSON server-side, before the SDK
+  sees it — not cleanly fixable on our side. This is the failure that actually
+  costs tasks.
+- **Critic false-positive** — on **c4** (LCM 1–12, wrong answer) LADY scored
+  100/100 PASS. A weak-critic quality issue; a stronger critic model is the fix,
+  not code.
+
+### Verified
+
+| Step | Result |
+|---|---|
+| `npm run typecheck` | exit 0 |
+| `npm run build` | exit 0, all 9 routes |
+| `npm test` (units + e2e) | **65 + 44 = 109** passing (+9 new: 5 model-picker, 4 LADY repair) |
+| Browser smoke on `next start` | Command Deck opens/animates, provider switch re-scopes model list, `⌘K` palette + all actions, idle graph, budget strip — no console errors |
+
+The model-picker plumbing is proven end to end **without a key**: new unit tests
+drive `withRunConfig({models}) → resolveModel/modelLabel` and the catalog
+validation directly. No live paid call was ever made.
+
+### Deliberately not done
+
+- **A post-fix eval re-run.** The LADY repair improves robustness and token cost
+  but, per the orchestrator trace above, would not have moved 17/20 on this run —
+  and Groq free-tier 8000 TPM makes a full run ~15+ min. Not worth the churn for
+  an unchanged headline number; re-run on a stronger provider for real figures.
+- The two Groq model-quality issues above (tool-call args, critic false-positive)
+  — model limitations, not architecture bugs.
+- Deploy / Upstash / flip-public — still need the owner's accounts and call
+  (GUIDE.md §16.8 items 2–4).

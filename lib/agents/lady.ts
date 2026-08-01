@@ -4,6 +4,59 @@ import { VerdictSchema, type Verdict, type Plan } from "./schemas";
 import type { TokenBudget } from "@/lib/budget";
 
 /**
+ * Recover a valid verdict object from schema-prepended output.
+ *
+ * Some models — notably Groq's openai/gpt-oss-120b — emit the JSON *schema*
+ * concatenated in front of the actual object (`{"$schema":…}{"criteria":…}`),
+ * i.e. two top-level objects, which is invalid JSON and fails generateObject's
+ * parse (`json_validate_failed`). Without this, a correct answer's run crashes
+ * before LADY can judge, killing the verdict, StyleRank, and Reflexion retry.
+ *
+ * Recovery: scan for balanced top-level `{…}` groups (string/escape aware) and
+ * return the last one that parses AND isn't merely a `$schema` wrapper. This
+ * runs ONLY when the normal parse fails, so it is inert for well-behaved
+ * providers (Anthropic/OpenAI/Google emit a single clean object).
+ */
+export function repairSchemaPrependedJson(text: string): string | null {
+  const groups: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (c === "}" && depth > 0) {
+      if (--depth === 0 && start >= 0) {
+        groups.push(text.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+  for (let i = groups.length - 1; i >= 0; i--) {
+    try {
+      const parsed = JSON.parse(groups[i]) as Record<string, unknown>;
+      const keys = Object.keys(parsed);
+      if (keys.length && !(keys.length <= 2 && "$schema" in parsed)) {
+        return groups[i];
+      }
+    } catch {
+      // not valid on its own — keep scanning earlier groups
+    }
+  }
+  return null;
+}
+
+/**
  * LADY — critic. No demonic powers: pure external judgment.
  * Rubric-driven LLM-as-judge over three axes (mirroring MCP-Bench):
  * task completion, tool usage rationale, grounding. Produces the verbal
@@ -29,6 +82,8 @@ export async function critique(
   const { object, usage } = await generateObject({
     model: resolveModel("critic"),
     schema: VerdictSchema,
+    // Defend against models that prepend the schema (see helper above).
+    experimental_repairText: async ({ text }) => repairSchemaPrependedJson(text),
     system: [
       "You are LADY, the evaluation agent of a multi-agent system. You judge the executor's answer against the user's goal.",
       "Score three criteria from 0-100:",

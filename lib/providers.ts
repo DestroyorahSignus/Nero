@@ -78,7 +78,8 @@ export function serverKeyConfigured(provider: ProviderId): boolean {
 
 export function resolveModel(role: AgentRole): LanguageModel {
   const provider = activeProvider();
-  const id = ENV_OVERRIDE[role] ?? DEFAULTS[provider][role];
+  // Precedence: request-scoped Command Deck pick > env override > default.
+  const id = runConfig().models?.[role] ?? ENV_OVERRIDE[role] ?? DEFAULTS[provider][role];
   const byokKey = runConfig().apiKey;
 
   // BYOK path: build a provider instance bound to the request-scoped key.
@@ -110,5 +111,7 @@ export function resolveModel(role: AgentRole): LanguageModel {
 }
 
 export function modelLabel(role: AgentRole): string {
-  return `${activeProvider()}/${ENV_OVERRIDE[role] ?? DEFAULTS[activeProvider()][role]}`;
+  const provider = activeProvider();
+  const id = runConfig().models?.[role] ?? ENV_OVERRIDE[role] ?? DEFAULTS[provider][role];
+  return `${provider}/${id}`;
 }

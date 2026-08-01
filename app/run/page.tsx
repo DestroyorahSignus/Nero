@@ -13,7 +13,13 @@ import { PhaseTracker } from "@/components/console/PhaseTracker";
 import { ComboMeter } from "@/components/console/ComboMeter";
 import { RunHistory } from "@/components/console/RunHistory";
 import { CutPanel } from "@/components/ui/CutPanel";
-import { KeyVault, readVault } from "@/components/console/KeyVault";
+import {
+  CommandDeck,
+  readVault,
+  type DeployStatus,
+} from "@/components/console/CommandDeck";
+import { CommandPalette, type Command } from "@/components/console/CommandPalette";
+import { BudgetStrip } from "@/components/console/BudgetStrip";
 import { TraceTimeline } from "@/components/console/TraceTimeline";
 import { SpanWaterfall } from "@/components/console/SpanWaterfall";
 import { ApprovalCard } from "@/components/console/ApprovalCard";
@@ -25,21 +31,12 @@ const MISSIONS = [
   "Which region wins on revenue? region,units,revenue\\nNorth,120,24000\\nSouth,80,16000\\nWest,140,28000",
 ];
 
-interface DeployStatus {
-  provider: string;
-  serverKeyConfigured: boolean;
-  models: { planner: string; executor: string; critic: string };
-  yamatoMode: string;
-  budgetTokens: number;
-  searchConfigured: boolean;
-  memoryDurable: boolean;
-}
-
 export default function RunConsole() {
   const [goal, setGoal] = useState("");
   const [deploy, setDeploy] = useState<DeployStatus | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
-  const [vaultOpen, setVaultOpen] = useState(false);
+  const [deckOpen, setDeckOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [safeMode, setSafeMode] = useState(true);
   const [hasClientKey, setHasClientKey] = useState(false);
   const [vaultProvider, setVaultProvider] = useState("");
@@ -71,6 +68,9 @@ export default function RunConsole() {
         if (v.apiKey) h["x-nero-api-key"] = v.apiKey;
         if (v.provider) h["x-nero-provider"] = v.provider;
         if (v.tavilyKey) h["x-nero-tavily-key"] = v.tavilyKey;
+        if (v.models.planner) h["x-nero-planner-model"] = v.models.planner;
+        if (v.models.executor) h["x-nero-executor-model"] = v.models.executor;
+        if (v.models.critic) h["x-nero-critic-model"] = v.models.critic;
         h["x-nero-approval"] =
           window.sessionStorage.getItem("nero-safemode") !== "0" ? "on" : "off";
         return h;
@@ -88,10 +88,22 @@ export default function RunConsole() {
       .catch(() => {});
   }, []);
 
-  // Keyboard: "/" focuses the mission input
+  // Keyboard: ⌘K/Ctrl+K toggles the command palette; "/" focuses the mission
+  // input (unless a text field — including the palette/deck — already has it).
   useEffect(() => {
+    const isEditable = (el: Element | null) =>
+      el instanceof HTMLElement &&
+      (el.tagName === "INPUT" ||
+        el.tagName === "TEXTAREA" ||
+        el.tagName === "SELECT" ||
+        el.isContentEditable);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "/" && document.activeElement !== inputRef.current) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+        return;
+      }
+      if (e.key === "/" && !isEditable(document.activeElement)) {
         e.preventDefault();
         inputRef.current?.focus();
       }
@@ -122,6 +134,45 @@ export default function RunConsole() {
   const terminal =
     phase === "done" || phase === "failed" || phase === "budget_exceeded";
   const streamError = status === "error" ? error : undefined;
+
+  // ⌘K command palette actions
+  const commands: Command[] = [
+    {
+      id: "focus",
+      label: "Focus mission input",
+      hint: "/",
+      keywords: "goal brief type",
+      run: () => inputRef.current?.focus(),
+    },
+    {
+      id: "deck",
+      label: "Open Command Deck",
+      hint: "⚙",
+      keywords: "settings keys models provider safe mode api",
+      run: () => setDeckOpen(true),
+    },
+    {
+      id: "safe",
+      label: `Turn SAFE MODE ${safeMode ? "OFF" : "ON"}`,
+      keywords: "approval run_js gate sandbox",
+      run: toggleSafeMode,
+    },
+    {
+      id: "replay",
+      label: "Copy replay permalink",
+      keywords: "share link url",
+      run: () =>
+        void navigator.clipboard.writeText(
+          `${window.location.origin}/run/${chatId}`,
+        ),
+    },
+    ...MISSIONS.map((m, i) => ({
+      id: `mission-${i}`,
+      label: `Deploy: ${m.length > 46 ? m.slice(0, 46) + "…" : m}`,
+      keywords: "run launch preset mission",
+      run: () => launch(m.replaceAll("\\n", "\n")),
+    })),
+  ];
 
   return (
     <main className="console-atmosphere min-h-screen pb-16">
@@ -169,21 +220,18 @@ export default function RunConsole() {
               }
             />
             <button
-              onClick={toggleSafeMode}
-              title="Safe mode gates run_js behind operator approval"
-              className={`font-mono cut-sm border px-2 py-1 text-[9px] tracking-widest transition ${
-                safeMode
-                  ? "border-ember/60 bg-ember/10 text-ember"
-                  : "border-edge text-mist hover:text-bone"
-              }`}
+              onClick={() => setPaletteOpen(true)}
+              title="Command palette (⌘K)"
+              className="font-mono cut-sm border border-edge px-2 py-1 text-[9px] tracking-widest text-mist transition hover:border-spectral/50 hover:text-bone"
             >
-              SAFE MODE {safeMode ? "ON" : "OFF"}
+              ⌘K
             </button>
             <button
-              onClick={() => setVaultOpen(true)}
+              onClick={() => setDeckOpen(true)}
+              title="Keys · models · safe mode"
               className="font-display cut-sm border border-spectral/60 bg-spectral/5 px-3 py-1 text-[10px] font-semibold tracking-widest text-spectral transition hover:bg-spectral/20"
             >
-              KEYS
+              ⚙ COMMAND DECK
             </button>
             <p className="font-mono hidden text-[10px] tracking-[0.2em] text-mist md:block">
               {running ? "● LIVE" : "READY"}
@@ -193,6 +241,15 @@ export default function RunConsole() {
         <div className="mx-auto mt-3 max-w-6xl">
           <PhaseTracker status={state.runStatus} />
         </div>
+        <BudgetStrip
+          provider={hasClientKey && vaultProvider ? vaultProvider : deploy?.provider ?? "—"}
+          metrics={state.metrics}
+          budgetTokens={deploy?.budgetTokens ?? 150_000}
+          memoryDurable={deploy?.memoryDurable ?? false}
+          searchArmed={hasClientTavily || Boolean(deploy?.searchConfigured)}
+          safeMode={safeMode}
+          running={running}
+        />
       </header>
 
       {/* ── Mission input ─────────────────────────────────────── */}
@@ -230,12 +287,12 @@ export default function RunConsole() {
         </div>
         {!hasClientKey && deploy && !deploy.serverKeyConfigured && (
           <p className="font-mono mt-3 border-l-2 border-ember pl-3 text-[10px] leading-relaxed text-ember">
-            No API key on this deployment — missions will fail. Hit{" "}
+            No API key on this deployment — missions will fail. Open the{" "}
             <button
-              onClick={() => setVaultOpen(true)}
+              onClick={() => setDeckOpen(true)}
               className="underline underline-offset-2 hover:text-bone"
             >
-              KEYS
+              COMMAND DECK
             </button>{" "}
             to add your own (stays in this tab, never stored server-side).
           </p>
@@ -394,14 +451,23 @@ export default function RunConsole() {
         </aside>
       </section>
 
-      <KeyVault
-        open={vaultOpen}
-        onClose={() => setVaultOpen(false)}
+      <CommandDeck
+        open={deckOpen}
+        onClose={() => setDeckOpen(false)}
+        deploy={deploy}
+        safeMode={safeMode}
+        onToggleSafeMode={toggleSafeMode}
         onChange={(hasKey, provider, hasTavily) => {
           setHasClientKey(hasKey);
           setVaultProvider(provider);
           setHasClientTavily(hasTavily);
         }}
+      />
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        commands={commands}
       />
     </main>
   );

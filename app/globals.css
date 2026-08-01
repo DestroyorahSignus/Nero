@@ -264,17 +264,109 @@ body {
   mask-image: radial-gradient(ellipse 90% 80% at 50% 20%, black 30%, transparent 75%);
 }
 
+/* ── Command Deck (left slide-in drawer) ─────────────────────────── */
+.deck-backdrop {
+  animation: backdrop-in 0.25s ease both;
+}
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.deck-slide {
+  animation: deck-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes deck-in {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
+}
+/* Staggered fade-up for the deck's stacked controls */
+.deck-item {
+  animation: deck-item-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes deck-item-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.deck-item:nth-child(1) { animation-delay: 0.08s; }
+.deck-item:nth-child(2) { animation-delay: 0.12s; }
+.deck-item:nth-child(3) { animation-delay: 0.16s; }
+.deck-item:nth-child(4) { animation-delay: 0.20s; }
+.deck-item:nth-child(5) { animation-delay: 0.24s; }
+.deck-item:nth-child(6) { animation-delay: 0.28s; }
+.deck-item:nth-child(7) { animation-delay: 0.32s; }
+.deck-item:nth-child(8) { animation-delay: 0.36s; }
+.deck-item:nth-child(9) { animation-delay: 0.40s; }
+.deck-item:nth-child(n + 10) { animation-delay: 0.44s; }
+/* Press feedback on deck buttons */
+.deck-press {
+  transition:
+    transform 0.12s cubic-bezier(0.3, 1.4, 0.4, 1),
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.deck-press:active {
+  transform: scale(0.95);
+}
+
+/* ── Command palette pop-in ──────────────────────────────────────── */
+.palette-pop {
+  animation: palette-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes palette-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── Idle crew node (pre-deploy breathing) ───────────────────────── */
+.node-idle {
+  animation: node-idle 3.4s ease-in-out infinite;
+}
+@keyframes node-idle {
+  0%, 100% {
+    box-shadow: 0 0 0 1px var(--color-edge);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-spectral) 35%, var(--color-edge)),
+      0 0 10px color-mix(in srgb, var(--color-spectral) 14%, transparent);
+  }
+}
+
+/* ── Budget burn bar (ember once near the wall) ──────────────────── */
+.budget-fill-hot {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-ember) 60%, transparent),
+    var(--color-ember)
+  );
+  box-shadow: 0 0 10px color-mix(in srgb, var(--color-ember) 45%, transparent);
+  transition: width 0.25s cubic-bezier(0.3, 1.2, 0.4, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .react-flow__edge.edge-active path,
   .node-running,
+  .node-idle,
   .rank-glyph,
   .glitch,
   .glitch::before,
   .glitch::after,
   .pulse-track::after,
   .hazard-run,
-  .banner-slam {
+  .banner-slam,
+  .deck-backdrop,
+  .deck-slide,
+  .deck-item,
+  .palette-pop {
     animation: none;
+  }
+  /* Slide-in drawers must still land in their resting position */
+  .deck-slide,
+  .deck-item,
+  .palette-pop {
+    opacity: 1;
+    transform: none;
   }
 }
 

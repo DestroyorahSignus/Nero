@@ -8,6 +8,11 @@ import { TokenBudget } from "@/lib/budget";
 import { deriveConsoleState } from "@/lib/derive";
 import { ApprovalBroker, withApprovalGate, decide } from "@/lib/approvals";
 import { TASKS } from "@/lib/evals/suite";
+import { withRunConfig } from "@/lib/run-context";
+import { modelLabel, resolveModel } from "@/lib/providers";
+import { isKnownModel } from "@/lib/model-catalog";
+import { repairSchemaPrependedJson } from "@/lib/agents/lady";
+import { VerdictSchema } from "@/lib/agents/schemas";
 import type { NeroUIMessage } from "@/ai/types";
 import type { ToolSet } from "ai";
 
@@ -206,6 +211,63 @@ West,Gun,50,2500`;
     // Gate disabled
     const open = withApprovalGate(ARSENAL as unknown as ToolSet, broker, false);
     check("gate disabled → identical toolset (no wrap)", open.run_js === (ARSENAL as any).run_js);
+  }
+
+  // ── Model picker: request-scoped per-role override ────────────────
+  // Guards the Command Deck feature end to end WITHOUT a key or network:
+  // the exact header → RunConfig.models → resolveModel/modelLabel path.
+  console.log("\nMODEL PICKER — request-scoped per-role override");
+  {
+    check("catalog validates a known groq id", isKnownModel("groq", "openai/gpt-oss-120b"));
+    check("catalog rejects an unknown id", !isKnownModel("groq", "totally-made-up-model"));
+
+    const criticLabel = await withRunConfig(
+      { provider: "groq", models: { critic: "openai/gpt-oss-20b" } },
+      async () => modelLabel("critic"),
+    );
+    check("override changes the resolved critic label", criticLabel === "groq/openai/gpt-oss-20b", criticLabel);
+
+    const plannerLabel = await withRunConfig(
+      { provider: "groq", models: { critic: "openai/gpt-oss-20b" } },
+      async () => modelLabel("planner"),
+    );
+    check("un-overridden role keeps the provider default", plannerLabel === "groq/openai/gpt-oss-120b", plannerLabel);
+
+    const model = await withRunConfig(
+      { provider: "groq", models: { executor: "openai/gpt-oss-20b" } },
+      async () => resolveModel("executor"),
+    );
+    check("resolveModel returns a bound model for the override", Boolean(model));
+  }
+
+  // ── LADY structured-output repair (Groq gpt-oss-120b quirk) ───────
+  // The critic crashed on Groq because gpt-oss-120b prepends the JSON
+  // schema, emitting two concatenated objects. Guard the recovery path.
+  console.log("\nLADY — schema-prepended verdict repair");
+  {
+    const realVerdict =
+      '{"criteria":[{"name":"task_completion","score":90,"justification":"correct"},{"name":"tool_usage","score":85,"justification":"ok"},{"name":"grounding","score":95,"justification":"grounded"}],"overallScore":90,"pass":true,"critique":"solid","reflection":""}';
+    const prepended =
+      '{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"criteria":{}}}' +
+      realVerdict;
+
+    const repaired = repairSchemaPrependedJson(prepended);
+    check("extracts the real object past the prepended schema", repaired === realVerdict, repaired);
+    check(
+      "repaired text validates against VerdictSchema",
+      repaired !== null && VerdictSchema.safeParse(JSON.parse(repaired)).success,
+    );
+
+    // A justification carrying braces + escaped quotes must not fool the scan.
+    const nested =
+      '{"$schema":"x"}{"criteria":[{"name":"task_completion","score":1,"justification":"has {brace} and \\"quote\\""},{"name":"tool_usage","score":1,"justification":"j"},{"name":"grounding","score":1,"justification":"j"}],"overallScore":1,"pass":false,"critique":"c","reflection":"r"}';
+    const r2 = repairSchemaPrependedJson(nested);
+    check(
+      "brace/quote-safe scan survives strings with braces",
+      r2 !== null && VerdictSchema.safeParse(JSON.parse(r2)).success,
+      r2,
+    );
+    check("returns null when there is no recoverable object", repairSchemaPrependedJson("not json at all") === null);
   }
 
   // ── Eval suite integrity ──────────────────────────────────────────

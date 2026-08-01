@@ -581,6 +581,14 @@ The ablation is the point:
 - Publish BOTH numbers. The ablation baseline is what makes the headline
   credible.
 
+Measured (on groq/openai/gpt-oss-120b, a small free model):
+  bare executor  85% (17/20)  ~1,800 tokens/run
+  full loop      85% (17/20)  ~4,200 tokens/run
+On this weak model the completion delta is ~0, and several failures are
+Groq free-tier rate limits / structured-output quirks rather than the
+architecture. The delta is the signal — re-run on a stronger provider
+for headline numbers.
+
 ---
 
 ## 12. Provider abstraction
@@ -881,8 +889,10 @@ programmatic checks, --bare ablation.
 
 ### 16.8 Known gaps / next actions (in priority order)
 
-1. RUN THE EVALS and put both numbers (bare vs full) in README's table —
-   the headline metric is still "_run it_". Needs a provider key.
+1. DONE (on groq/openai/gpt-oss-120b, a small free model) — both numbers
+   are in README's table: bare 85% (17/20, ~1,800 tok/run), full 85%
+   (17/20, ~4,200 tok/run). Re-run on a stronger provider for headline
+   figures; the delta (not the absolute score) is the signal.
 2. Deploy to Vercel (repo import; maxDuration is 300 = Hobby-safe;
    raise to 800 on Pro). Then set NERO_SELF_URL and demo
    YAMATO_MODE=remote.

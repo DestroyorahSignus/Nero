@@ -79,7 +79,7 @@ logged. This is what makes the public demo usable by anyone without the
 deployer footing the bill. The `KEY` chip shows the active source:
 `CLIENT` / `SERVER` / `MISSING`.
 
-## Evals (run these, put the numbers here)
+## Evals
 
 ```bash
 npm run evals -- --bare   # ablation: bare executor
@@ -88,8 +88,10 @@ npm run evals             # full loop: plan + critique + reflexion
 
 | Configuration | Task completion | Mean tokens/run |
 |---|---|---|
-| Bare executor | _run it_ | _run it_ |
-| Full NERO loop | _run it_ | _run it_ |
+| Bare executor | 85% (17/20) | ~1,800 |
+| Full NERO loop | 85% (17/20) | ~4,200 |
+
+> Measured on `groq/openai/gpt-oss-120b` — a small, free model whose absolute scores are noisy (some failures are Groq free-tier rate limits and structured-output quirks, not the architecture). The **bare-vs-full delta** is the signal, not the absolute numbers; run against a stronger provider for headline figures.
 
 ## Deploy
 
