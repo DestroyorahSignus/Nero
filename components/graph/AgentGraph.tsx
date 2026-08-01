@@ -46,7 +46,7 @@ function AgentNode({ data }: NodeProps<AgentFlowNode>) {
           : "bg-edge";
   return (
     <div
-      className={`cut-sm min-w-36 border border-edge bg-panel px-4 py-3 ${stateClass}`}
+      className={`node-hover cut-sm min-w-36 border border-edge bg-panel px-4 py-3 ${stateClass}`}
     >
       <Handle type="target" position={Position.Left} className="!bg-edge" />
       <div className="flex items-center gap-2">

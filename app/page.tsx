@@ -90,7 +90,7 @@ export default function Landing() {
           <div className="mt-10 flex flex-wrap items-center gap-4">
             <Link
               href="/run"
-              className="font-display cut-sm border border-spectral bg-spectral/10 px-8 py-3 text-sm font-semibold tracking-widest text-spectral transition hover:bg-spectral/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-spectral"
+              className="press sheen font-display cut-sm border border-spectral bg-spectral/10 px-8 py-3 text-sm font-semibold tracking-widest text-spectral hover:bg-spectral/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-spectral"
             >
               OPEN THE CONSOLE
             </Link>
@@ -126,13 +126,13 @@ export default function Landing() {
             </div>
           </div>
 
-          <div className="mt-8 grid max-w-2xl grid-cols-1 gap-px border border-edge bg-edge font-mono text-xs sm:grid-cols-3">
+          <div className="reveal mt-8 grid max-w-2xl grid-cols-1 gap-px border border-edge bg-edge font-mono text-xs sm:grid-cols-3">
             {[
               ["provider-agnostic", "anthropic · openai · google · groq"],
               ["hard guardrails", "token budget + attempt ceiling"],
               ["measured", "20-task eval suite w/ ablation"],
             ].map(([k, v]) => (
-              <div key={k} className="bg-void p-4">
+              <div key={k} className="row-int bg-void p-4 hover:bg-panel">
                 <p className="text-spectral">{k}</p>
                 <p className="mt-1 leading-relaxed text-mist">{v}</p>
               </div>
@@ -146,12 +146,12 @@ export default function Landing() {
         <h2 className="font-display text-sm font-semibold tracking-[0.3em] text-mist">
           THE CREW — ONE RUN, FOUR AGENTS
         </h2>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+        <div className="reveal mt-8 grid gap-4 sm:grid-cols-2">
           {AGENTS.map((a) => (
             <CutPanel
               key={a.name}
               accent={a.accent}
-              className="transition-transform duration-200 hover:-translate-y-0.5"
+              interactive
               bodyClassName="p-6"
             >
               <p className={`font-display text-xl font-bold italic ${a.color}`}>
@@ -185,7 +185,7 @@ export default function Landing() {
           {ARSENAL.map((t) => (
             <div
               key={t.server}
-              className="grid gap-2 bg-panel p-5 transition-colors hover:bg-panel/60 sm:grid-cols-[160px_220px_1fr] sm:items-baseline"
+              className="row-int grid gap-2 bg-panel p-5 hover:bg-panel/60 sm:grid-cols-[160px_220px_1fr] sm:items-baseline"
             >
               <p className="font-display text-sm font-semibold text-spectral">
                 {t.server}

@@ -11,6 +11,7 @@ export function CutPanel({
   className = "",
   bodyClassName = "",
   small = false,
+  interactive = false,
   style,
 }: {
   children: ReactNode;
@@ -18,13 +19,18 @@ export function CutPanel({
   className?: string;
   bodyClassName?: string;
   small?: boolean;
+  /** Hover-lift + accent glow (glow follows the accent color). */
+  interactive?: boolean;
   style?: CSSProperties;
 }) {
   const cut = small ? "cut-sm" : "cut";
+  const liftStyle = interactive
+    ? ({ "--lift-glow": accent } as CSSProperties)
+    : undefined;
   return (
     <div
-      className={`${cut} ${className}`}
-      style={{ background: accent, padding: 1, ...style }}
+      className={`${cut} ${interactive ? "lift" : ""} ${className}`}
+      style={{ background: accent, padding: 1, ...liftStyle, ...style }}
     >
       <div className={`${cut} h-full w-full bg-panel ${bodyClassName}`}>
         {children}

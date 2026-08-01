@@ -344,7 +344,147 @@ body {
   transition: width 0.25s cubic-bezier(0.3, 1.2, 0.4, 1);
 }
 
+/* ── Interaction layer: hover / press / focus / reveal ───────────── */
+
+/* Hover-lift for clipped panels & cards. drop-shadow (not box-shadow)
+   survives clip-path, so the glow follows the corner cuts. --lift-glow is
+   set to the panel's accent by CutPanel; falls back to spectral. */
+.lift {
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1),
+    filter 0.22s ease;
+}
+.lift:hover {
+  transform: translateY(-3px);
+  filter: drop-shadow(
+    0 8px 20px color-mix(in srgb, var(--lift-glow, var(--color-spectral)) 30%, transparent)
+  );
+}
+
+/* Springy press feedback for any button */
+.press {
+  transition:
+    transform 0.12s cubic-bezier(0.3, 1.4, 0.4, 1),
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.press:active {
+  transform: scale(0.96);
+}
+
+/* Sheen sweep across primary buttons on hover (clip-path already hides
+   the overflow, so the highlight wipes within the cut shape) */
+.sheen {
+  position: relative;
+}
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 32%,
+    color-mix(in srgb, white 24%, transparent) 50%,
+    transparent 68%
+  );
+  transform: translateX(-135%);
+  transition: transform 0.6s cubic-bezier(0.3, 0.9, 0.3, 1);
+  pointer-events: none;
+}
+.sheen:hover::after {
+  transform: translateX(135%);
+}
+
+/* Interactive chips / small bordered controls: lift + accent glow */
+.chip-int {
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    filter 0.16s ease;
+}
+.chip-int:hover {
+  transform: translateY(-2px);
+  filter: drop-shadow(0 4px 10px color-mix(in srgb, var(--color-spectral) 28%, transparent));
+}
+
+/* Focus glow for the clipped mission input */
+.glow-focus {
+  transition:
+    border-color 0.2s ease,
+    filter 0.25s ease;
+}
+.glow-focus:focus {
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--color-spectral) 40%, transparent));
+}
+
+/* Graph node hover — lift + brighten (react-flow nodes stay non-draggable) */
+.node-hover {
+  transition:
+    transform 0.18s ease,
+    filter 0.18s ease;
+}
+.node-hover:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.12)
+    drop-shadow(0 5px 14px color-mix(in srgb, var(--color-spectral) 30%, transparent));
+}
+
+/* Staggered entrance reveal for a container's direct children */
+.reveal > * {
+  animation: rise-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.reveal > *:nth-child(1) { animation-delay: 0.05s; }
+.reveal > *:nth-child(2) { animation-delay: 0.11s; }
+.reveal > *:nth-child(3) { animation-delay: 0.17s; }
+.reveal > *:nth-child(4) { animation-delay: 0.23s; }
+.reveal > *:nth-child(5) { animation-delay: 0.29s; }
+.reveal > *:nth-child(6) { animation-delay: 0.35s; }
+.reveal > *:nth-child(n + 7) { animation-delay: 0.41s; }
+
+/* Arsenal row hover — nudge in + accent text */
+.row-int {
+  transition:
+    background-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.row-int:hover {
+  transform: translateX(4px);
+  box-shadow: inset 2px 0 0 var(--color-spectral);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .rise-in,
+  .reveal > * {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .lift,
+  .chip-int,
+  .press,
+  .node-hover,
+  .row-int,
+  .glow-focus {
+    transition: none;
+  }
+  .lift:hover,
+  .chip-int:hover,
+  .node-hover:hover,
+  .row-int:hover,
+  .press:active {
+    transform: none;
+    filter: none;
+  }
+  .sheen::after {
+    display: none;
+  }
   .react-flow__edge.edge-active path,
   .node-running,
   .node-idle,

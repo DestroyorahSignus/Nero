@@ -28,7 +28,7 @@ export function MetricsPanel({ metrics }: { metrics: MetricsData | null }) {
   ];
 
   return (
-    <div className="border border-edge bg-panel">
+    <div className="lift border border-edge bg-panel">
       <div className="grid grid-cols-3 gap-px bg-edge">
         {cells.map(([k, v]) => (
           <div key={k} className="bg-panel p-3">

@@ -222,14 +222,14 @@ export default function RunConsole() {
             <button
               onClick={() => setPaletteOpen(true)}
               title="Command palette (⌘K)"
-              className="font-mono cut-sm border border-edge px-2 py-1 text-[9px] tracking-widest text-mist transition hover:border-spectral/50 hover:text-bone"
+              className="chip-int press font-mono cut-sm border border-edge px-2 py-1 text-[9px] tracking-widest text-mist hover:border-spectral/50 hover:text-bone"
             >
               ⌘K
             </button>
             <button
               onClick={() => setDeckOpen(true)}
               title="Keys · models · safe mode"
-              className="font-display cut-sm border border-spectral/60 bg-spectral/5 px-3 py-1 text-[10px] font-semibold tracking-widest text-spectral transition hover:bg-spectral/20"
+              className="press sheen font-display cut-sm border border-spectral/60 bg-spectral/5 px-3 py-1 text-[10px] font-semibold tracking-widest text-spectral hover:bg-spectral/20"
             >
               ⚙ COMMAND DECK
             </button>
@@ -275,12 +275,12 @@ export default function RunConsole() {
             onKeyDown={(e) => e.key === "Enter" && launch(goal)}
             placeholder="Give the crew a goal — computation, data, or a URL to investigate"
             disabled={running}
-            className="cut-sm w-full border border-edge bg-panel px-4 py-3 text-sm text-bone placeholder:text-mist focus:border-spectral focus:outline-none disabled:opacity-50"
+            className="glow-focus cut-sm w-full border border-edge bg-panel px-4 py-3 text-sm text-bone placeholder:text-mist focus:border-spectral focus:outline-none disabled:opacity-50"
           />
           <button
             onClick={() => launch(goal)}
             disabled={running || !goal.trim()}
-            className="font-display cut-sm shrink-0 border border-spectral bg-spectral/10 px-6 text-sm font-semibold tracking-widest text-spectral transition hover:bg-spectral/25 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-spectral"
+            className="press sheen font-display cut-sm shrink-0 border border-spectral bg-spectral/10 px-6 text-sm font-semibold tracking-widest text-spectral hover:bg-spectral/25 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-spectral"
           >
             {running ? "RUNNING…" : "DEPLOY"}
           </button>
@@ -303,7 +303,7 @@ export default function RunConsole() {
               key={m}
               onClick={() => launch(m.replaceAll("\\n", "\n"))}
               disabled={running}
-              className="font-mono cut-sm border border-edge px-3 py-1.5 text-[10px] text-mist transition hover:border-spectral hover:text-spectral disabled:opacity-40"
+              className="chip-int press font-mono cut-sm border border-edge px-3 py-1.5 text-[10px] text-mist hover:border-spectral hover:text-spectral disabled:opacity-40"
             >
               {m.length > 60 ? m.slice(0, 60) + "…" : m}
             </button>
@@ -380,8 +380,8 @@ export default function RunConsole() {
 
       {/* ── Console grid ─────────────────────────────────────── */}
       <section className="mx-auto grid max-w-6xl gap-4 px-6 py-6 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-4">
-          <CutPanel accent={running ? "var(--color-spectral)" : "var(--color-edge)"}>
+        <div className="reveal space-y-4">
+          <CutPanel interactive accent={running ? "var(--color-spectral)" : "var(--color-edge)"}>
             <PanelTitle>AGENT GRAPH — LIVE</PanelTitle>
             <AgentGraph
               agentSteps={state.agentSteps}
@@ -389,12 +389,12 @@ export default function RunConsole() {
             />
           </CutPanel>
 
-          <CutPanel>
+          <CutPanel interactive>
             <PanelTitle>TRACE</PanelTitle>
             <TraceTimeline entries={state.trace} />
           </CutPanel>
 
-          <CutPanel accent={terminal && phase === "done" ? "var(--color-spectral)" : "var(--color-edge)"}>
+          <CutPanel interactive accent={terminal && phase === "done" ? "var(--color-spectral)" : "var(--color-edge)"}>
             <PanelTitle>FINAL ANSWER</PanelTitle>
             <div className="p-4">
               {state.finalText ? (
@@ -415,8 +415,9 @@ export default function RunConsole() {
           </CutPanel>
         </div>
 
-        <aside className="space-y-4">
+        <aside className="reveal space-y-4">
           <CutPanel
+            interactive
             accent={
               state.verdict
                 ? state.verdict.pass
@@ -428,23 +429,23 @@ export default function RunConsole() {
             <StyleRank verdict={state.verdict} />
           </CutPanel>
 
-          <CutPanel bodyClassName="p-3">
+          <CutPanel interactive bodyClassName="p-3">
             <ComboMeter eventCount={state.eventCount} running={running} />
           </CutPanel>
 
           <MetricsPanel metrics={state.metrics} />
 
-          <CutPanel>
+          <CutPanel interactive>
             <PanelTitle>PHASE SPANS</PanelTitle>
             <SpanWaterfall spans={state.spans} />
           </CutPanel>
 
-          <CutPanel>
+          <CutPanel interactive>
             <PanelTitle>VERGIL&apos;S PLAN</PanelTitle>
             <PlanChecklist plan={state.plan} />
           </CutPanel>
 
-          <CutPanel>
+          <CutPanel interactive>
             <PanelTitle>MISSION LOG — TRISH</PanelTitle>
             <RunHistory refreshKey={historyKey} />
           </CutPanel>
