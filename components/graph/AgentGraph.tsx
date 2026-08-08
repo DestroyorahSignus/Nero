@@ -222,15 +222,25 @@ export function AgentGraph({
   const [nodes, setNodes, onNodesChange] = useNodesState<AgentFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  // Sync the computed layout into state. When the user has unlocked DRAG, keep
-  // whatever positions they set for nodes that still exist; otherwise use the
-  // tidy machine layout (locking re-tidies).
+  // Sync the computed layout into state by MERGING onto existing nodes, never
+  // replacing them wholesale. Spreading the previous node preserves React
+  // Flow's internally-attached `measured` dimensions — overwriting them every
+  // stream tick strips those dims, which makes fitView collapse to an empty
+  // viewport and the graph go blank mid-run. We update only data/edges-class
+  // and (when locked) the tidy position; a dragged node keeps its position.
   useEffect(() => {
     setNodes((prev) => {
-      const pos = new Map(prev.map((n) => [n.id, n.position]));
-      return computed.nodes.map((n) =>
-        draggable && pos.has(n.id) ? { ...n, position: pos.get(n.id)! } : n,
-      );
+      const prevById = new Map(prev.map((n) => [n.id, n]));
+      return computed.nodes.map((cn) => {
+        const p = prevById.get(cn.id);
+        if (!p) return cn; // new node — nothing measured yet, use as-is
+        return {
+          ...p, // keep measured dims, selection, etc.
+          data: cn.data,
+          className: cn.className,
+          position: draggable ? p.position : cn.position,
+        };
+      });
     });
   }, [computed.nodes, draggable, setNodes]);
   useEffect(() => {
