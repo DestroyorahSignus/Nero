@@ -6,6 +6,7 @@ import { trish } from "@/lib/memory/trish";
 import { TokenBudget, MAX_REFLECTIONS } from "@/lib/budget";
 import { withRunConfig, runConfig, type RunConfig } from "@/lib/run-context";
 import { ApprovalBroker, withApprovalGate } from "@/lib/approvals";
+import { errorMessage } from "@/lib/errors";
 import { scoreToRank } from "@/ai/types";
 import type {
   PlanData,
@@ -298,7 +299,7 @@ async function runNeroInner(
     } catch (err) {
       // Provider blew up mid-run (rate limit, oversized request, outage).
       // Keep whatever we have, report the truth, end the mission cleanly.
-      crash = err instanceof Error ? err.message : String(err);
+      crash = errorMessage(err);
       console.error("[nero] attempt crashed:", err);
     }
   } finally {

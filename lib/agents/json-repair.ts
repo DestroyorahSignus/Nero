@@ -1,3 +1,5 @@
+import { errorMessage } from "@/lib/errors";
+
 /**
  * Repair structured-output text from models that don't return a clean object.
  *
@@ -53,7 +55,7 @@ export function repairStructuredJson(text: string): string | null {
  * problems that must surface immediately, not be retried or masked.
  */
 export function isStructuredOutputError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err ?? "");
+  const msg = errorMessage(err);
   if (/api[_ ]?key|unauthor|invalid[_ ]?api|\b401\b|missing/i.test(msg)) return false;
   return /schema|no object generated|response did not match|json|structured|additionalProperties/i.test(
     msg,

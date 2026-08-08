@@ -6,6 +6,7 @@ import { runNero, type OrchestratorSink } from "@/lib/agents/orchestrator";
 import { trish } from "@/lib/memory/trish";
 import { activeProvider, isProviderId, type AgentRole } from "@/lib/providers";
 import { isKnownModel } from "@/lib/model-catalog";
+import { errorMessage } from "@/lib/errors";
 import type { RunConfig } from "@/lib/run-context";
 import type { NeroUIMessage } from "@/ai/types";
 
@@ -112,8 +113,7 @@ export async function POST(req: Request) {
     },
     onError: (error) => {
       console.error("[nero] run failed:", error);
-      const detail =
-        error instanceof Error ? error.message : String(error ?? "unknown");
+      const detail = errorMessage(error);
       return `Run failed: ${detail.slice(0, 400)} — if this mentions a key, open KEYS; if it mentions rate limits or request size, the provider throttled the run (free tiers are tight) — retry, simplify the mission, or switch provider in KEYS.`;
     },
   });

@@ -11,7 +11,8 @@ import { TASKS } from "@/lib/evals/suite";
 import { withRunConfig } from "@/lib/run-context";
 import { modelLabel, resolveModel } from "@/lib/providers";
 import { isKnownModel } from "@/lib/model-catalog";
-import { repairStructuredJson } from "@/lib/agents/json-repair";
+import { repairStructuredJson, isStructuredOutputError } from "@/lib/agents/json-repair";
+import { errorMessage } from "@/lib/errors";
 import { VerdictSchema } from "@/lib/agents/schemas";
 import type { NeroUIMessage } from "@/ai/types";
 import type { ToolSet } from "ai";
@@ -272,6 +273,27 @@ West,Gun,50,2500`;
     check("strips a ```json fence", okVerdict(repairStructuredJson("```json\n" + realVerdict + "\n```")));
 
     check("returns null when there is no recoverable object", repairStructuredJson("not json at all") === null);
+  }
+
+  // ── Error messaging — no "[object Object]" ────────────────────────
+  // Providers surface plain objects; String(obj) is useless and defeats the
+  // structured-output classifier (→ the run failed with "[object Object]").
+  console.log("\nERROR MESSAGING — dig out real provider messages");
+  {
+    check("Error → its message", errorMessage(new Error("boom")) === "boom");
+    check("string passthrough", errorMessage("plain string") === "plain string");
+    check("nested {error:{message}} extracted", errorMessage({ error: { message: "rate limit reached" } }) === "rate limit reached");
+    check("top-level {message} extracted", errorMessage({ message: "schema mismatch" }) === "schema mismatch");
+    check("never returns [object Object]", errorMessage({ foo: 1 }) !== "[object Object]");
+    // The object-shaped schema error now classifies correctly → retried/fell back
+    check(
+      "object-shaped schema error is recognized (would retry, not crash)",
+      isStructuredOutputError({ error: { message: "Generated JSON does not match the expected schema" } }) === true,
+    );
+    check(
+      "object-shaped auth error is NOT masked as structured",
+      isStructuredOutputError({ error: { message: "invalid api key" } }) === false,
+    );
   }
 
   // ── Eval suite integrity ──────────────────────────────────────────
