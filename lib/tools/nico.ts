@@ -21,7 +21,11 @@ export const runJs = tool({
     code: z
       .string()
       .min(1)
-      .max(6_000)
+      // No tight upper bound: Groq rejects a tool call whose args violate the
+      // schema, so a longer-than-cap snippet would kill the run. The sandbox's
+      // 2s CPU limit and the token budget are the real guards; keep only a
+      // generous sanity ceiling.
+      .max(50_000)
       .describe(
         "JavaScript source. Use console.log for intermediate output; the value of the last expression is also returned.",
       ),

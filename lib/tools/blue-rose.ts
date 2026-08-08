@@ -15,7 +15,16 @@ export const webSearch = tool({
     "Search the web for current information. Returns a list of results with title, url and content snippet. Prefer this for anything time-sensitive or outside your knowledge.",
   inputSchema: z.object({
     query: z.string().min(2).describe("Concise search query, 2-8 words"),
-    maxResults: z.number().int().min(1).max(6).default(3),
+    // No upper bound in the schema: Groq hard-fails a tool call whose args
+    // violate the schema (e.g. it picks maxResults=10 against a max of 6),
+    // which would kill the whole run. Accept any sensible count and clamp to a
+    // safe ceiling internally instead.
+    maxResults: z
+      .number()
+      .int()
+      .min(1)
+      .default(3)
+      .describe("How many results to return (1-6 is plenty)"),
   }),
   execute: async ({ query, maxResults }) => {
     const key = runConfig().tavilyKey ?? process.env.TAVILY_API_KEY;
@@ -34,7 +43,7 @@ export const webSearch = tool({
       },
       body: JSON.stringify({
         query,
-        max_results: maxResults,
+        max_results: Math.min(Math.max(1, maxResults ?? 3), 6), // clamp: fewer results = fewer tokens (tight free-tier TPM)
         include_answer: false,
       }),
     });
@@ -57,7 +66,7 @@ export const webSearch = tool({
       results: (data.results ?? []).map((r) => ({
         title: r.title,
         url: r.url,
-        snippet: r.content.slice(0, 400),
+        snippet: r.content.slice(0, 280),
       })),
     };
   },
