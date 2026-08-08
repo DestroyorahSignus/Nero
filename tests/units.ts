@@ -11,7 +11,7 @@ import { TASKS } from "@/lib/evals/suite";
 import { withRunConfig } from "@/lib/run-context";
 import { modelLabel, resolveModel } from "@/lib/providers";
 import { isKnownModel } from "@/lib/model-catalog";
-import { repairSchemaPrependedJson } from "@/lib/agents/lady";
+import { repairStructuredJson } from "@/lib/agents/json-repair";
 import { VerdictSchema } from "@/lib/agents/schemas";
 import type { NeroUIMessage } from "@/ai/types";
 import type { ToolSet } from "ai";
@@ -243,31 +243,35 @@ West,Gun,50,2500`;
   // ── LADY structured-output repair (Groq gpt-oss-120b quirk) ───────
   // The critic crashed on Groq because gpt-oss-120b prepends the JSON
   // schema, emitting two concatenated objects. Guard the recovery path.
-  console.log("\nLADY — schema-prepended verdict repair");
+  console.log("\nJSON REPAIR — Groq gpt-oss schema-echo variants");
   {
     const realVerdict =
       '{"criteria":[{"name":"task_completion","score":90,"justification":"correct"},{"name":"tool_usage","score":85,"justification":"ok"},{"name":"grounding","score":95,"justification":"grounded"}],"overallScore":90,"pass":true,"critique":"solid","reflection":""}';
+    const okVerdict = (s: string | null) =>
+      s !== null && VerdictSchema.safeParse(JSON.parse(s)).success;
+
+    // Variant 1: schema concatenated in front of the real object.
     const prepended =
       '{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"criteria":{}}}' +
       realVerdict;
+    const r1 = repairStructuredJson(prepended);
+    check("extracts the real object past the prepended schema", r1 === realVerdict, r1);
+    check("prepended → validates against VerdictSchema", okVerdict(r1));
 
-    const repaired = repairSchemaPrependedJson(prepended);
-    check("extracts the real object past the prepended schema", repaired === realVerdict, repaired);
-    check(
-      "repaired text validates against VerdictSchema",
-      repaired !== null && VerdictSchema.safeParse(JSON.parse(repaired)).success,
-    );
+    // Variant 2: real VALUES nested under a schema envelope's `properties`.
+    const nestedUnderProps =
+      '{"$schema":"x","type":"object","required":["pass"],"properties":' + realVerdict + "}";
+    check("recovers values nested under properties", okVerdict(repairStructuredJson(nestedUnderProps)));
 
-    // A justification carrying braces + escaped quotes must not fool the scan.
-    const nested =
+    // Variant 3: a justification carrying braces + escaped quotes.
+    const braces =
       '{"$schema":"x"}{"criteria":[{"name":"task_completion","score":1,"justification":"has {brace} and \\"quote\\""},{"name":"tool_usage","score":1,"justification":"j"},{"name":"grounding","score":1,"justification":"j"}],"overallScore":1,"pass":false,"critique":"c","reflection":"r"}';
-    const r2 = repairSchemaPrependedJson(nested);
-    check(
-      "brace/quote-safe scan survives strings with braces",
-      r2 !== null && VerdictSchema.safeParse(JSON.parse(r2)).success,
-      r2,
-    );
-    check("returns null when there is no recoverable object", repairSchemaPrependedJson("not json at all") === null);
+    check("brace/quote-safe scan survives strings with braces", okVerdict(repairStructuredJson(braces)));
+
+    // Variant 4: wrapped in a ```json fence.
+    check("strips a ```json fence", okVerdict(repairStructuredJson("```json\n" + realVerdict + "\n```")));
+
+    check("returns null when there is no recoverable object", repairStructuredJson("not json at all") === null);
   }
 
   // ── Eval suite integrity ──────────────────────────────────────────

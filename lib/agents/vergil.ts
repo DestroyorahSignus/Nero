@@ -1,10 +1,13 @@
 import { streamObject } from "ai";
 import { resolveModel } from "@/lib/providers";
+import { repairStructuredJson, isStructuredOutputError } from "./json-repair";
 import { PlanSchema, type Plan } from "./schemas";
 import type { TokenBudget } from "@/lib/budget";
 import type { StoredReflection } from "@/lib/memory/trish";
 import { TOOL_META } from "@/lib/tools/registry";
 import { runConfig } from "@/lib/run-context";
+
+const PLAN_ATTEMPTS = 3;
 
 /**
  * VERGIL — planner. Cold, strategic, then steps back.
@@ -32,43 +35,77 @@ export async function plan(
           .join("\n")}`
       : "";
 
-  const result = streamObject({
-    model: resolveModel("planner"),
-    schema: PlanSchema,
-    system: [
-      "You are VERGIL, the planning agent of the NERO multi-agent system.",
-      "Decompose the user's goal into the smallest ordered set of steps that will accomplish it.",
-      "Each step needs a concrete, checkable success criterion — vague criteria are a planning failure.",
-      "Available tools:",
-      toolCatalog,
-      "Rules:",
-      "- Prefer 1-3 steps. Only exceed 3 when the goal genuinely requires it.",
-      "- If the goal is answerable without tools, plan a single 'none' step.",
-      "- Tool restraint: explanations, diagrams, flowcharts, writing, and general-knowledge tasks need NO tools — plan 'none'. Reserve web_search for current events or facts you genuinely cannot know, and never plan more than one search step.",
-      "- Never plan steps for capabilities that do not exist in the tool list, and never plan tools marked OFFLINE — plan around them (own knowledge or other tools).",
-    ].join("\n"),
-    prompt: `Goal: ${goal}${reflectionBlock}`,
-  });
+  const system = [
+    "You are VERGIL, the planning agent of the NERO multi-agent system.",
+    "Respond with a single JSON object matching the required plan structure — no prose outside the JSON.",
+    "Decompose the user's goal into the smallest ordered set of steps that will accomplish it.",
+    "Each step needs a concrete, checkable success criterion — vague criteria are a planning failure.",
+    "Available tools:",
+    toolCatalog,
+    "Rules:",
+    "- Prefer 1-3 steps. Only exceed 3 when the goal genuinely requires it.",
+    "- If the goal is answerable without tools, plan a single 'none' step.",
+    "- Tool restraint: explanations, diagrams, flowcharts, writing, and general-knowledge tasks need NO tools — plan 'none'. Reserve web_search for current events or facts you genuinely cannot know, and never plan more than one search step.",
+    "- Never plan steps for capabilities that do not exist in the tool list, and never plan tools marked OFFLINE — plan around them (own knowledge or other tools).",
+  ].join("\n");
+  const prompt = `Goal: ${goal}${reflectionBlock}`;
 
-  // The plan checklist fills in live as schema-conformant fragments stream.
-  //
-  // Consume fullStream, not partialObjectStream: on a provider failure (missing
-  // or rejected key, rate limit, outage) the partial stream simply ends and
-  // `await result.object` NEVER SETTLES — the run would hang forever with the
-  // console frozen on "VERGIL is planning". The error arrives as a stream part,
-  // so surface it and let the orchestrator report the truth.
-  let streamError: unknown = null;
-  try {
-    for await (const part of result.fullStream) {
-      if (part.type === "object") onPartial?.(part.object);
-      else if (part.type === "error") streamError = part.error;
+  // One structured-plan attempt. Consumes fullStream (not partialObjectStream):
+  // on a provider failure the partial stream just ends and `result.object`
+  // NEVER SETTLES — the run would hang forever on "VERGIL is planning". The
+  // error arrives as a stream part, so we capture and rethrow it.
+  const attempt = async (): Promise<Plan> => {
+    const result = streamObject({
+      model: resolveModel("planner"),
+      schema: PlanSchema,
+      experimental_repairText: async ({ text }) => repairStructuredJson(text),
+      system,
+      prompt,
+    });
+    let streamError: unknown = null;
+    try {
+      for await (const part of result.fullStream) {
+        if (part.type === "object") onPartial?.(part.object);
+        else if (part.type === "error") streamError = part.error;
+      }
+    } catch (err) {
+      throw streamError ?? err;
     }
-  } catch (err) {
-    throw streamError ?? err;
-  }
-  if (streamError) throw streamError;
+    if (streamError) throw streamError;
+    const object = await result.object; // validated against PlanSchema
+    budget.record(await result.usage);
+    return object;
+  };
 
-  const object = await result.object; // fully validated against PlanSchema
-  budget.record(await result.usage);
-  return object;
+  // gpt-oss on Groq intermittently mangles native json_schema (it echoes the
+  // schema → a fatal provider error). It's stochastic, so retry; a re-sample
+  // almost always conforms. Auth/key errors are NOT retried — they surface.
+  let lastErr: unknown;
+  for (let i = 1; i <= PLAN_ATTEMPTS; i++) {
+    try {
+      return await attempt();
+    } catch (err) {
+      lastErr = err;
+      if (!isStructuredOutputError(err) || i === PLAN_ATTEMPTS) break;
+    }
+  }
+
+  // Still no valid plan after retries: don't kill the run — fall back to a
+  // trivial "answer directly" plan so the executor still gets its shot (this
+  // is the same shape as the eval `--bare` baseline).
+  if (isStructuredOutputError(lastErr)) {
+    const fallback: Plan = {
+      strategy: "Answer the goal directly.",
+      steps: [
+        {
+          title: "Answer the goal",
+          toolHint: "none",
+          successCriteria: "A correct, complete answer to the goal.",
+        },
+      ],
+    };
+    onPartial?.(fallback);
+    return fallback;
+  }
+  throw lastErr;
 }
