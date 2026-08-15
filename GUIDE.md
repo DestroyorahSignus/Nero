@@ -149,6 +149,11 @@ Why schema-validated planning matters:
   decomposition = more tokens = more places to go wrong.
 - On retries, reflections are injected into the planning prompt — a failed
   run doesn't just retry harder, it RE-PLANS differently.
+- Resilience (see §16.11): the structured call is retried up to 3× — weak
+  models (Groq gpt-oss) intermittently mangle native json_schema — with a
+  shared JSON repair (lib/agents/json-repair.ts) on the text. If every
+  attempt still fails, VERGIL falls back to a trivial "answer directly"
+  plan so the run continues instead of dying before a plan exists.
 
 ### 4.2 NERO — executor
 File: lib/agents/nero.ts · Primitive: ToolLoopAgent
@@ -220,6 +225,10 @@ NeurIPS 2023, arXiv:2303.11366). LADY is that signal:
 - Rubric states explicitly: a plausible-sounding but unverified answer is
   a FAIL, not an A. The anti-sycophancy clause.
 - The D→SSS rank is presentation; the pass gate is the real contract.
+- Resilience (see §16.11): same retry + JSON-repair as VERGIL. If the
+  critic still can't emit a structured verdict, it returns the answer
+  UNJUDGED with an explicit caveat (pass=true, score 70) rather than
+  failing the whole run — the un-verification is made visible, not hidden.
 
 ### 4.4 TRISH — memory
 File: lib/memory/trish.ts · Backend: Upstash Redis, in-process Map fallback
@@ -341,7 +350,7 @@ FENCED as untrusted data (<<<UNTRUSTED_WEB_CONTENT>>> sentinels + notice)
 ### NICO — code sandbox (lib/tools/nico.ts)
 
 ```
- agent JS (≤6k chars) ──► node:vm context
+ agent JS (generous size cap) ──► node:vm context
                             · no require, no process, no fetch
                             · code-gen from strings/wasm disabled
                             · 2s hard timeout
@@ -512,11 +521,12 @@ geometry is angular corner cuts everywhere — a two-layer clip-path trick
 
 ```
  ┌── header ────────────────────────────────────────────────────────┐
- │ NERO▮   chips: LLM · YAMATO · SEARCH · MEMORY        ● LIVE      │
+ │ NERO▮  chips: LLM·YAMATO·SEARCH·MEMORY·KEY   [⌘K][COMMAND DECK]  │
  │ PLAN ──────────── EXECUTE ──────────── JUDGE   (phase tracker)   │
+ │ ◦ groq · 12.4k/150k tokens ▓▓░░ · MEM · SEARCH · SAFE  (strip)   │
  ├── mission briefing ──────────────────────────────────[ DEPLOY ]──┤
  ├───────────────────────────────────────┬──────────────────────────┤
- │  AGENT GRAPH — LIVE                   │  STYLE RANK  (D → SSS)   │
+ │  AGENT GRAPH — LIVE  [DRAG TOOLS MAP] │  STYLE RANK  (D → SSS)   │
  │  (React Flow: crew + tool nodes,      │  rank slam + ladder      │
  │   pulsing edges while running)        ├──────────────────────────┤
  ├───────────────────────────────────────┤  COMBO METER             │
@@ -540,8 +550,30 @@ geometry is angular corner cuts everywhere — a two-layer clip-path trick
   that visualizes the eval, not decoration.
 - The combo meter is honest theater — it visualizes real event throughput
   (each streamed part lands a hit; inactivity bleeds it down).
-- Accessibility floor: prefers-reduced-motion disables every animation,
-  focus states visible, progress bars carry ARIA attributes.
+- COMMAND DECK (components/console/CommandDeck.tsx): one left slide-in
+  drawer that is the single config surface — provider + BYOK keys, SAFE
+  MODE, the per-role MODEL PICKER (§12), and live deployment status. It
+  replaced the old KeyVault modal; `readVault()` is still the single
+  client key read-path used by the transport headers() closure.
+- ⌘K COMMAND PALETTE (CommandPalette.tsx): keyboard launcher — deploy a
+  preset, open the deck, toggle SAFE MODE, copy the replay permalink.
+- BUDGET STRIP (BudgetStrip.tsx): always-visible header strip — provider,
+  live token-budget burn, MEMORY/SEARCH/SAFE state.
+- AGENT GRAPH is interactive: an options toolbar (DRAG to rearrange, TOOLS
+  to show/hide tool nodes, MAP minimap, ZOOM scroll-zoom, FIT) + zoom
+  controls; click a node for a detail popover. Live updates MERGE into
+  existing nodes (preserving React Flow's measured dims + any dragged
+  positions) — a wholesale replace blanks the graph mid-run.
+- LIVING BACKGROUND (components/ui/LivingBackground.tsx): a global,
+  cursor-reactive ambience layer. Repaint-free by construction — the
+  pointer glow moves via transform:translate3d only (no per-frame mask or
+  background-position animation, no blur filter), so it stays cheap.
+- Accessibility floor: prefers-reduced-motion disables every animation
+  (including the living background + the constant hero-title sheen), focus
+  states visible, progress bars carry ARIA attributes.
+- Overlays (Command Deck, palette) use a solid dark scrim, NOT
+  backdrop-blur — blurring the animated page every frame was a real lag
+  source.
 
 ---
 
@@ -595,10 +627,13 @@ for headline numbers.
 File: lib/providers.ts
 
 ```
- resolveModel(role) ──► NERO_{ROLE}_MODEL set? ──┬─ yes ─► exact model id
-                                                 └─ no ──► defaults table
+ resolveModel(role) id precedence:
+   Command Deck pick (runConfig().models[role])   ← client, request-scoped
+        └► NERO_{ROLE}_MODEL env                   ← deployment override
+             └► DEFAULTS[provider][role]           ← table
                                 │
-                        LLM_PROVIDER env var
+                        activeProvider()
+     BYOK header override  ►  LLM_PROVIDER env var
                 ┌───────────┬────────────┬───────────┐
             anthropic     openai       google       groq
 ```
@@ -609,6 +644,13 @@ File: lib/providers.ts
   weaker than the worker — a judge that misses what the executor missed
   produces reflections that make things worse.
 - Env overrides isolate the codebase from provider model-id churn.
+- MODEL PICKER (client capability): the Command Deck lets the user choose
+  a model per role. Picks ride as x-nero-{planner,executor,critic}-model
+  headers, are validated server-side against a shared allow-list
+  (lib/model-catalog.ts — unknown ids are dropped, never reaching a
+  provider), land in RunConfig.models, and win in resolveModel. The same
+  catalog feeds the dropdowns. /api/status.models surfaces the resolved
+  labels (also shown read-only in the deck).
 
 ---
 
@@ -698,12 +740,16 @@ nero/
 │   ├── approvals.ts           HITL gate: broker, store, withApprovalGate
 │   ├── derive.ts              parts → console state (live + replay)
 │   ├── providers.ts           LLM_PROVIDER switch + per-role models
+│   ├── model-catalog.ts       allow-listed model ids per provider (picker)
+│   ├── run-context.ts         RunConfig via AsyncLocalStorage (BYOK+models)
+│   ├── errors.ts              errorMessage() — real msg from any thrown value
 │   ├── budget.ts              TokenBudget hard cap + MAX_REFLECTIONS
 │   ├── agents/
 │   │   ├── schemas.ts         PlanSchema + VerdictSchema (Zod)
-│   │   ├── vergil.ts          planner  — streamObject
+│   │   ├── json-repair.ts     repairStructuredJson + isStructuredOutputError
+│   │   ├── vergil.ts          planner  — streamObject (retry + fallback)
 │   │   ├── nero.ts            executor — ToolLoopAgent + callbacks
-│   │   ├── lady.ts            critic   — rubric LLM-as-judge
+│   │   ├── lady.ts            critic   — rubric judge (retry + fallback)
 │   │   └── orchestrator.ts    the Reflexion state machine + sink
 │   ├── mcp/yamato.ts          dual-mode tool gateway
 │   ├── memory/trish.ts        reflections + run log (Redis/fallback)
@@ -730,9 +776,14 @@ nero/
 │       └── runs/route.ts      TRISH's mission log
 │
 └── components/
-    ├── ui/CutPanel.tsx        two-layer clip-path corner-cut panel
-    ├── graph/AgentGraph.tsx   React Flow crew + tool nodes
+    ├── ui/
+    │   ├── CutPanel.tsx       two-layer clip-path panel (+interactive lift)
+    │   └── LivingBackground.tsx  global cursor-reactive ambience (client)
+    ├── graph/AgentGraph.tsx   React Flow crew + tool nodes (interactive)
     └── console/
+        ├── CommandDeck.tsx    the config drawer + readVault() key store
+        ├── CommandPalette.tsx ⌘K keyboard launcher
+        ├── BudgetStrip.tsx    header token-burn + status strip
         ├── StyleRank.tsx      the signature: D→SSS rank slam + ladder
         ├── PhaseTracker.tsx   PLAN → EXECUTE → JUDGE stepper
         ├── ComboMeter.tsx     event-throughput gauge, DMC style
@@ -770,10 +821,14 @@ world.
   ICD-10-CM medical-coding pipeline). NERO fills the AGENTIC
   ORCHESTRATION gap: MCP, multi-agent loops, self-correction,
   observability, HITL safety.
-- Repo: github.com/DestroyorahSignus/Nero (private as of this writing;
-  flip public after eval numbers land in README).
+- Repo: github.com/DestroyorahSignus/Nero. Deployed on Vercel at
+  nero-three-woad.vercel.app. Eval numbers have landed in README (§11).
+  Deployment runs on the free Groq tier (LLM_PROVIDER=groq); Upstash is
+  NOT yet configured, so replay permalinks return NO RECORD across
+  instances (see §16.8) — the one open loose end on the live demo.
 - Constraint honored throughout: NO model training — inference-only via
-  provider APIs.
+  provider APIs. Zero-cost testing rule: all live verification runs on the
+  free Groq + Tavily tiers only, never a paid provider.
 
 ### 16.2 Stack + pinned-version landmines
 
@@ -791,8 +846,9 @@ world.
 - Tailwind v4: design tokens live in app/globals.css under @theme
   (bg-void, text-spectral etc. resolve from --color-* vars). No
   tailwind.config file.
-- Fonts via next/font/google in app/layout.tsx: Chakra Petch (display),
-  IBM Plex Sans (body), IBM Plex Mono (data).
+- Fonts via a Google Fonts <link> in app/layout.tsx (runtime load, system
+  fallback baked into globals.css — the build never needs a font CDN):
+  Chakra Petch (display), IBM Plex Sans (body), IBM Plex Mono (data).
 
 ### 16.3 AI SDK v7 API facts (verified against installed .d.ts, not docs)
 
@@ -808,9 +864,20 @@ world.
 - DefaultChatTransport `headers` accepts a FUNCTION (Resolvable) —
   resolved fresh per request; that's how BYOK keys ride from
   sessionStorage.
-- streamObject: iterate result.partialObjectStream (DeepPartial —
-  guard undefined nested fields), then await result.object (validated)
-  and result.usage.
+- streamObject: consume result.fullStream (NOT partialObjectStream) —
+  forward part.type==="object" to the UI, and capture part.type==="error"
+  so a provider failure surfaces instead of hanging (partialObjectStream
+  just ends on error and result.object never settles → frozen run).
+  Then await result.object (validated) and result.usage.
+- generateObject AND streamObject accept experimental_repairText
+  ({text,error}) => Promise<string|null> — recover malformed structured
+  output before it throws (used for the Groq schema-echo, see §16.11).
+- Groq provider model factory takes ONLY a model id; per-call knobs go via
+  providerOptions:{groq:{...}} (e.g. structuredOutputs, strictJsonSchema),
+  not a model-settings arg.
+- repairToolCall / experimental_repairToolCall are CLIENT-side — they do
+  NOT fire when Groq rejects a tool call's args server-side (its strict
+  tool-schema validation). Fix by not sending Groq tight bounds instead.
 - mcp-handler server.tool overload used:
   server.tool(name, description, zodShape, annotations, handler).
 - The MCP route MUST export GET, POST and DELETE or clients see empty
@@ -838,6 +905,16 @@ world.
 8. BYOK keys travel per-request via AsyncLocalStorage (lib/run-context)
    — never module/global state, never logged, never persisted.
 9. The critic must never be a weaker model than the executor.
+10. Never stringify an error with String(err) or `err instanceof Error ?
+    ... : String(err)` — providers throw plain objects → "[object
+    Object]". Always route through errorMessage() (lib/errors.ts), which
+    also feeds the structured-output classifier.
+11. Never hand a provider a tight upper bound on a model-filled field
+    (tool-schema maxima, etc.) — Groq validates tool-call args server-side
+    and hard-fails the run. Keep lower bounds, drop upper bounds, clamp
+    internally.
+12. Structured-output calls (VERGIL/LADY) must retry + degrade gracefully,
+    never hard-fail the run on a weak-model JSON hiccup (§16.11).
 
 ### 16.5 Commands
 
@@ -864,7 +941,13 @@ Eval runner sets approvalMode:false internally (no operator at a CLI).
     YAMATO_MODE=local|remote     NERO_SELF_URL=https://<deploy>
 
 Request headers (client → /api/agent): x-nero-provider, x-nero-api-key,
-x-nero-tavily-key, x-nero-approval (on|off; missing = ON).
+x-nero-tavily-key, x-nero-approval (on|off; missing = ON),
+x-nero-{planner,executor,critic}-model (model-picker; validated against
+lib/model-catalog.ts, unknown ids dropped).
+
+Note: the eval CLI (tsx) reads process.env directly and does NOT autoload
+.env.local — export vars inline, e.g.
+  LLM_PROVIDER=groq GROQ_API_KEY=… TAVILY_API_KEY=… npm run evals
 
 ### 16.7 Feature inventory (all built, typechecked, prod-built, smoke-tested)
 
@@ -876,31 +959,42 @@ Arsenal: BLUE ROSE (web_search/web_fetch, injection-fenced), NICO
 MCP: real Streamable-HTTP server at /api/mcp/mcp (annotations on all
 tools); YAMATO dual-mode client (local | remote).
 Safety: SAFE MODE HITL gate (side-channel /api/approve, 90s fail-closed);
-prompt-injection fencing; BYOK key vault (sessionStorage +
-AsyncLocalStorage).
-UI: React Flow agent graph, trace timeline, DMC style-rank (D→SSS),
-combo meter, phase tracker, span waterfall, metrics + budget burn,
-plan checklist, mission log, deployment chips, key vault, approval
-cards, corner-cut design system, glitch hero.
+prompt-injection fencing; BYOK keys (sessionStorage + AsyncLocalStorage).
+Resilience (§16.11): structured-output retry + shared JSON repair +
+graceful fallback (VERGIL trivial plan / LADY unjudged verdict);
+errorMessage() everywhere; tool schemas free of Groq-hostile bounds.
+UI: interactive React Flow agent graph (drag/zoom/minimap/node-detail),
+trace timeline, DMC style-rank (D→SSS), combo meter, phase tracker, span
+waterfall, metrics + budget burn, plan checklist, mission log, deployment
+chips, COMMAND DECK config drawer (keys + SAFE MODE + per-role model
+picker + status), ⌘K command palette, budget strip, cursor-reactive
+living background, approval cards, corner-cut design system, glitch hero.
 Replay: /run/[sessionId] permalinks from onFinish snapshots (7-day TTL
-on Redis); share button; mission-log links.
+on Redis; NO RECORD without Upstash — see §16.8); share button; links.
 Evals: REBELLION — 20 tasks (7 compute / 5 data / 4 reasoning / 4 web),
 programmatic checks, --bare ablation.
 
 ### 16.8 Known gaps / next actions (in priority order)
 
-1. DONE (on groq/openai/gpt-oss-120b, a small free model) — both numbers
-   are in README's table: bare 85% (17/20, ~1,800 tok/run), full 85%
-   (17/20, ~4,200 tok/run). Re-run on a stronger provider for headline
-   figures; the delta (not the absolute score) is the signal.
-2. Deploy to Vercel (repo import; maxDuration is 300 = Hobby-safe;
-   raise to 800 on Pro). Then set NERO_SELF_URL and demo
-   YAMATO_MODE=remote.
-3. Add Upstash (free tier) so approvals/memory/replays survive across
-   serverless instances — REQUIRED for SAFE MODE on multi-instance
-   deployments (in-memory fallback only works single-instance/dev).
+1. #1 LIVE LOOSE END — add Upstash (free tier). The Vercel deploy has no
+   durable memory, so replay permalinks return NO RECORD across instances
+   and MEMORY shows VOLATILE. Set UPSTASH_REDIS_REST_URL +
+   UPSTASH_REDIS_REST_TOKEN in Vercel and redeploy. Required for
+   replays/mission-log/SAFE-MODE approvals to survive multi-instance.
+   (Needs the owner's Upstash + Vercel accounts.)
+2. Groq free-tier ceiling is 8000 TPM — search-heavy runs can exceed it
+   ("Request too large … tokens per minute"). Now surfaced as a readable
+   error and mitigated (trimmed web_search footprint), but not eliminated.
+   Cures: smaller query, wait a beat, a higher Groq tier, or a bigger
+   provider. Non-web tasks have ample headroom.
+3. Eval numbers DONE (groq/openai/gpt-oss-120b): README §11 has bare 85%
+   (17/20, ~1,800 tok/run) and full 85% (17/20, ~4,200 tok/run). Delta is
+   ~0 on this weak free model — re-run on a stronger provider for headline
+   figures; the delta (not the absolute) is the signal.
 4. Flip the repo public + add the live demo link to the repo
    description; record a 3-minute walkthrough video.
+   Deploy itself is DONE (nero-three-woad.vercel.app); to demo the MCP
+   round-trip set NERO_SELF_URL + YAMATO_MODE=remote.
 5. Deferred by design (documented in §14 trade-offs — do not "fix"
    without reading it): resumable live streams, OpenTelemetry export
    (upgrade path: @ai-sdk/otel + Langfuse), MCP elicitation/sampling
@@ -913,21 +1007,68 @@ programmatic checks, --bare ablation.
 
 ### 16.9 Testing conventions used so far
 
-- Zero-key smoke tests: deterministic tools (NICO fib/timeout/no-require,
-  KALINA aggregates), eval ground-truth cross-checks, rank mapping.
-- Approval lifecycle unit tests (9 cases): approve/deny round-trips,
-  double-decide + unknown-id rejection, safe-tool passthrough, disabled
-  gate passthrough.
-- Live-server smoke: boot next start on a port, curl every route,
-  verify BYOK header reaches the provider (bogus key → provider 401
-  proves the chain), verify /api/approve validation, replay route 200
-  on unknown ids.
+Suites: tests/units.ts (74) + tests/e2e-mock.ts (44) run key-free via
+`npm test`; tests/live.ts needs a running server. All zero-cost.
+
+- Zero-key unit tests: deterministic tools (NICO fib/timeout/no-require,
+  KALINA aggregates), eval ground-truth cross-checks, rank mapping,
+  TokenBudget, deriveConsoleState, the approval lifecycle (9 cases).
+- Model picker: withRunConfig({models}) → resolveModel/modelLabel + the
+  catalog validation — the whole feature proven without a key.
+- JSON repair: every Groq schema-echo variant (prepend, values-under-
+  properties, fenced) recovered and re-validated against VerdictSchema;
+  errorMessage() digs real messages out of object-shaped errors (never
+  "[object Object]"); the structured-output classifier is checked.
+- e2e-mock: the WHOLE orchestrator with MockLanguageModelV4 swapped in via
+  a Module._load hook (no test seam in prod code) — Reflexion retry,
+  budget wall, attempt ceiling, provider crash, SAFE MODE denial.
+- Live-server smoke: boot next start, curl every route, verify BYOK header
+  reaches the provider (bogus key → 401 proves the chain), /api/approve
+  validation, replay route 200 on unknown ids, a real MCP round trip.
+- Live Groq runs (free tier) confirm end-to-end fixes that mocks can't:
+  the schema-echo resilience and the web_search tool-schema fix.
 - Mermaid: every ARCHITECTURE.md diagram is parse-validated headlessly
   (mermaid + jsdom) before committing — GitHub renders no error boxes.
 
 ### 16.10 Doc map
 
-- README.md — pitch, quickstart, BYOK, eval table (fill it!), deploy.
+- README.md — pitch, quickstart, BYOK, eval table (filled), deploy.
 - ARCHITECTURE.md — the deep dive, 19 Mermaid diagrams (GitHub-rendered).
 - GUIDE.md — this file: ASCII everything + this handoff section.
 - PLAN.md — the original build plan the repo was executed from.
+- SESSIONS.md — day-wise work log (why changes were made, per session).
+
+### 16.11 Provider resilience (Groq free-tier hardening)
+
+The free Groq model (openai/gpt-oss-120b) is what the live demo runs on,
+and it's weak in three ways that used to hard-fail runs. All three are now
+contained; the pattern generalizes to any weak/cheap provider.
+
+1. Structured-output schema echo. gpt-oss intermittently returns the JSON
+   *Schema* itself (or nests the answer under `properties`) instead of an
+   instance. Native json_schema gives the best conformance (json_object
+   mode made it conform WORSE), so we KEEP native mode and:
+   - retry the structured call up to 3× (it's stochastic — a re-sample
+     usually conforms),
+   - repair the text via experimental_repairText + repairStructuredJson
+     (handles prepend / properties-nesting / fences),
+   - and on total failure DEGRADE, never crash: VERGIL → trivial
+     "answer directly" plan; LADY → answer returned unjudged with a
+     visible caveat (pass=true, score 70).
+   isStructuredOutputError classifies what to retry — and excludes
+   auth/key errors, which must surface immediately.
+
+2. Object-shaped errors. Providers throw plain objects, so String(err) →
+   "[object Object]" — which also blinded the classifier (so a schema
+   error wasn't retried). errorMessage() (lib/errors.ts) digs the real
+   message out of {message}/{error:{message}}/… and every stringify site
+   (orchestrator crash, /api/agent onError, the classifier) routes through
+   it. Invariant §16.4.10.
+
+3. Strict tool-call arg validation. Groq validates tool-call args against
+   the tool's JSON schema SERVER-SIDE and hard-fails the run on any
+   violation (client-side repairToolCall never fires). web_search capped
+   maxResults at 6; the model picked 10 → dead run. Rule (invariant
+   §16.4.11): keep lower bounds, DROP upper bounds on model-filled fields,
+   clamp internally. Also: 8000 TPM is tight — web_search snippets are
+   trimmed to keep search runs under the per-minute cap.
